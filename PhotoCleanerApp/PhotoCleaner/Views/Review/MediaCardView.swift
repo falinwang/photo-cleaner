@@ -1,5 +1,9 @@
 import SwiftUI
 import Photos
+import AVFoundation
+import AVKit
+import Combine
+import UIKit
 
 struct MediaCardView: View {
     let item: MediaItem
@@ -7,22 +11,77 @@ struct MediaCardView: View {
 
     @State private var image: UIImage? = nil
     @State private var imageRequestID: PHImageRequestID? = nil
+    @State private var player: AVPlayer? = nil
+    @State private var videoRequestID: PHImageRequestID? = nil
+    @State private var isPlaying = false
+    @State private var lazyFileSize: String? = nil
+
+    // Video controls
+    @State private var showControls = false
+    @State private var currentTime: Double = 0
+    @State private var duration: Double = 0
+    @State private var isSeeking = false
+    @State private var showFullScreen = false
+
+    private var isVideo: Bool { item.mediaType == .video }
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            imageLayer
+            mediaLayer
             badgeRow
         }
         .clipShape(RoundedRectangle(cornerRadius: 16))
-        .onAppear  { loadImage() }
+        .onAppear  { loadMedia() }
         .onDisappear { cancelRequest() }
+        .fullScreenCover(isPresented: $showFullScreen) {
+            FullScreenVideoView(player: player, isPlaying: isPlaying) {
+                // Restore inline state when returning from full screen
+                isPlaying = $0
+                showControls = true
+            }
+        }
+        .onReceive(timer) { _ in updateTime() }
     }
 
-    // MARK: - Image layer
+    // MARK: - Media layer
 
     @ViewBuilder
-    private var imageLayer: some View {
-        if let image {
+    private var mediaLayer: some View {
+        if isVideo {
+            if let player {
+                ZStack {
+                    PlayerView(player: player)
+
+                    // Tap anywhere to toggle controls
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.easeOut(duration: 0.15)) { showControls.toggle() }
+                            if showControls { scheduleAutoHide() }
+                        }
+
+                    // Controls overlay
+                    if showControls {
+                        videoControlsOverlay(player: player)
+                            .transition(.opacity)
+                    }
+
+                    // Big play button when paused and controls hidden
+                    if !isPlaying && !showControls {
+                        Button(action: { togglePlayback() }) {
+                            Image(systemName: "play.circle.fill")
+                                .font(.system(size: 56))
+                                .foregroundStyle(.white)
+                                .shadow(color: .black.opacity(0.4), radius: 6)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                placeholder
+            }
+        } else if let image {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFit()
@@ -30,6 +89,111 @@ struct MediaCardView: View {
         } else {
             placeholder
         }
+    }
+
+    // MARK: - Video controls overlay
+
+    private func videoControlsOverlay(player: AVPlayer) -> some View {
+        VStack(spacing: 0) {
+            Spacer()
+
+            // Progress bar + time labels
+            VStack(spacing: 4) {
+                Slider(
+                    value: $currentTime,
+                    in: 0...max(duration, 0.01),
+                    onEditingChanged: { editing in
+                        isSeeking = editing
+                        if editing {
+                            player.pause()
+                        } else {
+                            let target = CMTime(seconds: currentTime, preferredTimescale: 600)
+                            player.seek(to: target)
+                            if isPlaying { player.play() }
+                        }
+                    }
+                )
+                .tint(.white)
+                .scaleEffect(0.9)
+
+                HStack {
+                    Text(timeString(currentTime))
+                    Spacer()
+                    Text(timeString(duration))
+                }
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.white.opacity(0.7))
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 4)
+
+            // Bottom row: play/pause + fullscreen
+            HStack {
+                Button(action: { togglePlayback() }) {
+                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                        .font(.title3)
+                        .foregroundStyle(.white)
+                        .frame(width: 40, height: 40)
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                Button(action: { enterFullScreen() }) {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.title3)
+                        .foregroundStyle(.white)
+                        .frame(width: 40, height: 40)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 6)
+        }
+        .background(
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.6), .black.opacity(0.8)],
+                startPoint: .top, endPoint: .bottom
+            )
+        )
+    }
+
+    // MARK: - Full screen
+
+    private func enterFullScreen() {
+        showFullScreen = true
+    }
+
+    // MARK: - Time tracking
+
+    private var timer: Publishers.Autoconnect<Timer.TimerPublisher> {
+        Timer.publish(every: 0.25, on: .main, in: .common).autoconnect()
+    }
+
+    private func updateTime() {
+        guard let player, !isSeeking else { return }
+        let t = CMTimeGetSeconds(player.currentTime())
+        if t.isFinite { currentTime = t }
+        if duration == 0, let item = player.currentItem {
+            let d = CMTimeGetSeconds(item.duration)
+            if d.isFinite { duration = d }
+        }
+    }
+
+    private func scheduleAutoHide() {
+        guard isPlaying else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            if isPlaying && showControls {
+                withAnimation(.easeOut(duration: 0.2)) { showControls = false }
+            }
+        }
+    }
+
+    private func timeString(_ seconds: Double) -> String {
+        guard seconds.isFinite else { return "0:00" }
+        let m = Int(seconds) / 60
+        let s = Int(seconds) % 60
+        return String(format: "%d:%02d", m, s)
     }
 
     private var placeholder: some View {
@@ -46,7 +210,7 @@ struct MediaCardView: View {
             MediaTypeBadge(mediaType: item.mediaType)
             CloudStatusBadge(status: item.cloudStatus)
             Spacer()
-            if let size = item.formattedFileSize {
+            if let size = lazyFileSize ?? item.formattedFileSize {
                 Text(size)
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.white.opacity(0.9))
@@ -64,9 +228,36 @@ struct MediaCardView: View {
 
     // MARK: - PhotoKit loading
 
-    private func loadImage() {
+    private func loadMedia() {
         guard let asset = item.asset else { return }
+        if isVideo {
+            loadVideo(asset: asset)
+        } else {
+            loadImage(asset: asset)
+        }
+    }
 
+    private func loadVideo(asset: PHAsset) {
+        let options = PHVideoRequestOptions()
+        options.isNetworkAccessAllowed = true
+        options.deliveryMode = .highQualityFormat
+
+        videoRequestID = PHImageManager.default().requestPlayerItem(
+            forVideo: asset,
+            options: options
+        ) { playerItem, info in
+            guard let playerItem else { return }
+            DispatchQueue.main.async {
+                self.player = AVPlayer(playerItem: playerItem)
+                let isInCloud = info?[PHImageResultIsInCloudKey] as? Bool ?? false
+                onCloudStatusUpdate?(isInCloud ? .iCloudOnly : .local)
+            }
+        }
+
+        loadFileSize(asset: asset)
+    }
+
+    private func loadImage(asset: PHAsset) {
         let options = PHImageRequestOptions()
         options.deliveryMode = .opportunistic
         options.isNetworkAccessAllowed = true
@@ -88,12 +279,52 @@ struct MediaCardView: View {
                 onCloudStatusUpdate?(isInCloud ? .iCloudOnly : .local)
             }
         }
+
+        loadFileSize(asset: asset)
     }
+
+    private func loadFileSize(asset: PHAsset) {
+        guard item.fileSize == nil else { return }
+        DispatchQueue.global(qos: .utility).async { [asset] in
+            if let size = PhotoLibraryService.fileSize(from: asset) {
+                let formatted: String
+                if size >= 1_000_000 {
+                    formatted = String(format: "%.1f MB", Double(size) / 1_000_000)
+                } else {
+                    formatted = String(format: "%.0f KB", Double(size) / 1_000)
+                }
+                DispatchQueue.main.async { self.lazyFileSize = formatted }
+            }
+        }
+    }
+
+    // MARK: - Playback
+
+    private func togglePlayback() {
+        guard let player else { return }
+        if isPlaying {
+            player.pause()
+        } else {
+            player.play()
+            scheduleAutoHide()
+        }
+        isPlaying.toggle()
+    }
+
+    // MARK: - Cleanup
 
     private func cancelRequest() {
         if let id = imageRequestID {
             PHImageManager.default().cancelImageRequest(id)
+            imageRequestID = nil
         }
+        if let id = videoRequestID {
+            PHImageManager.default().cancelImageRequest(id)
+            videoRequestID = nil
+        }
+        player?.pause()
+        player = nil
+        isPlaying = false
     }
 
     // MARK: - Placeholder colors
@@ -108,7 +339,76 @@ struct MediaCardView: View {
     }
 }
 
-#Preview {
+// MARK: - Full screen video
+
+private struct FullScreenVideoView: View {
+    let player: AVPlayer?
+    @State var isPlaying: Bool
+    var onDismiss: (Bool) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
+
+            if let player {
+                VideoPlayer(player: player)
+                    .ignoresSafeArea()
+            } else {
+                ProgressView().tint(.white)
+            }
+
+            Button(action: {
+                onDismiss(isPlaying)
+                dismiss()
+            }) {
+                Image(systemName: "xmark")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 36, height: 36)
+                    .background(.white.opacity(0.2), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 56)
+            .padding(.trailing, 20)
+        }
+        .onAppear {
+            player?.play()
+            isPlaying = true
+        }
+    }
+}
+
+// MARK: - AVPlayerLayer-backed video view
+
+private final class PlayerLayerView: UIView {
+    override class var layerClass: AnyClass { AVPlayerLayer.self }
+    var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+}
+
+private struct PlayerView: UIViewRepresentable {
+    let player: AVPlayer
+
+    func makeUIView(context: Context) -> PlayerLayerView {
+        let view = PlayerLayerView()
+        view.playerLayer.player = player
+        view.playerLayer.videoGravity = .resizeAspect
+        return view
+    }
+
+    func updateUIView(_ view: PlayerLayerView, context: Context) {
+        view.playerLayer.player = player
+    }
+}
+
+#Preview("Photo") {
+    MediaCardView(item: MediaItem.mockItems[1])
+        .frame(height: 480)
+        .padding()
+        .background(.black)
+}
+
+#Preview("Video") {
     MediaCardView(item: MediaItem.mockItems[0])
         .frame(height: 480)
         .padding()

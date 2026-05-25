@@ -38,7 +38,7 @@ struct MediaItem: Identifiable {
     let asset: PHAsset?             // nil only for mock/preview items
     let mediaType: MediaType
     var cloudStatus: CloudStatus
-    let fileSize: Int64?            // bytes; nil = unknown
+    var fileSize: Int64?            // bytes; nil = unknown — loaded lazily per card
     let fileSizeIsEstimated: Bool
     let creationDate: Date?
 

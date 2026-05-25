@@ -25,6 +25,37 @@ class PhotoLibraryService {
         }
     }
 
+    func fetchOnThisDayGrouped(store: AssetStore) -> [YearGroup] {
+        let options = PHFetchOptions()
+        options.includeHiddenAssets = false
+        options.includeAllBurstAssets = false
+        options.predicate = onThisDayPredicate()
+        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+
+        let result = PHAsset.fetchAssets(with: options)
+        let calendar = Calendar.current
+        let currentYear = calendar.component(.year, from: Date())
+        var itemsByYear: [Int: [MediaItem]] = [:]
+
+        result.enumerateObjects { asset, _, _ in
+            guard store.isUnsorted(asset.localIdentifier),
+                  let date = asset.creationDate else { return }
+            let assetYear = calendar.component(.year, from: date)
+            guard assetYear < currentYear else { return }
+            itemsByYear[assetYear, default: []].append(self.makeItem(from: asset))
+        }
+
+        return itemsByYear
+            .map { year, items in
+                YearGroup(
+                    year: year,
+                    yearOffset: currentYear - year,
+                    items: items.sorted { ($0.creationDate ?? .distantPast) > ($1.creationDate ?? .distantPast) }
+                )
+            }
+            .sorted { $0.year > $1.year }
+    }
+
     // MARK: - Private fetch helpers
 
     private func fetchGeneral(mode: AppMode, store: AssetStore) -> [MediaItem] {
@@ -73,8 +104,8 @@ class PhotoLibraryService {
             id: asset.localIdentifier,
             asset: asset,
             mediaType: Self.mediaType(from: asset),
-            cloudStatus: .local,        // refined at image-load time via PHImageResultIsInCloudKey
-            fileSize: Self.fileSize(from: asset),
+            cloudStatus: .local,
+            fileSize: nil,              // loaded lazily per card — avoids main-thread watchdog
             fileSizeIsEstimated: false,
             creationDate: asset.creationDate
         )
@@ -110,7 +141,7 @@ class PhotoLibraryService {
         let currentYear = calendar.component(.year, from: today)
 
         var subs: [NSPredicate] = []
-        for year in max(currentYear - 10, 2000)..<currentYear {
+        for year in 1970..<currentYear {
             var comps = DateComponents()
             comps.year = year; comps.month = month; comps.day = day
             comps.hour = 0; comps.minute = 0; comps.second = 0

@@ -7,14 +7,13 @@ struct ReviewView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showHelp = false
     @State private var showAlbumStrip = false
+    @State private var showSourcePanel = false
 
-    // MARK: - Gesture state
-    @State private var dragOffset: CGSize = .zero
-    private let swipeThreshold: CGFloat = 90
+    // MARK: - Navigation swipe
+    @State private var navDragOffset: CGFloat = 0
+    private let navThreshold: CGFloat = 80
 
     var body: some View {
-        // Use VStack + .background instead of ZStack — avoids width-constraint issues
-        // that appear when a VStack is a child of ZStack with ignoresSafeArea content.
         contentView
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.black.ignoresSafeArea())
@@ -28,29 +27,47 @@ struct ReviewView: View {
             EmptyStateView(mode: mode, onBack: { dismiss() })
         } else {
             GeometryReader { geo in
+                let sourceH: CGFloat = showSourcePanel ? 260 : 0
+                let cardH = geo.size.height - topBarHeight - actionBarHeight - toggleRowHeight - sourceH
+
                 VStack(spacing: 0) {
                     TopBarView(
                         mode: mode,
                         item: session.currentItem,
                         progressText: session.progressText,
-                        trashHighlighted: isDraggingToDelete,
+                        trashHighlighted: false,
                         onClose: { dismiss() },
                         onHelp: { showHelp = true },
-                        onTrash: { animateAndCommit(.delete) }
+                        onTrash: { session.delete(store: assetStore) }
                     )
 
                     if let item = session.currentItem {
-                        cardLayer(for: item)
-                            .frame(height: geo.size.height - topBarHeight - actionBarHeight - albumToggleHeight)
+                        MediaCardView(item: item) { newStatus in
+                            session.updateCloudStatus(newStatus, for: item.id)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .frame(width: geo.size.width, height: cardH)
+                        .offset(x: navDragOffset)
+                        .gesture(navGesture)
+                        .id(item.id)
                     }
+
+                    if showSourcePanel, let item = session.currentItem {
+                        SourcePanelView(item: item)
+                            .id(item.id)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+
+                    toggleRow
 
                     ActionBarView(
                         mode: mode,
                         undoCount: session.undoCount,
-                        onSkip:   { animateAndCommit(.skip) },
-                        onKeep:   { animateAndCommit(.keep) },
-                        onReturn: { animateAndCommit(.keep) },
-                        onDelete: { animateAndCommit(.delete) },
+                        onSkip:   { session.skip() },
+                        onKeep:   { session.keep(store: assetStore) },
+                        onReturn: { session.returnToUnsorted(store: assetStore) },
+                        onDelete: { session.delete(store: assetStore) },
                         onUndo:   { session.undo(store: assetStore) }
                     )
 
@@ -66,175 +83,80 @@ struct ReviewView: View {
                             }
                         )
                         .transition(.move(edge: .bottom).combined(with: .opacity))
-                    } else {
-                        Button(action: {
-                            withAnimation(.easeInOut(duration: 0.2)) { showAlbumStrip = true }
-                        }) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "square.grid.2x2")
-                                Text("SORT TO ALBUM")
-                                    .kerning(0.5)
-                            }
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.5))
-                            .padding(.vertical, 10)
-                        }
                     }
                 }
             }
         }
     }
 
-    // Approximate heights for layout calculation
     private let topBarHeight: CGFloat = 72
     private let actionBarHeight: CGFloat = 110
-    private let albumToggleHeight: CGFloat = 34
+    private let toggleRowHeight: CGFloat = 36
 
-    private func cardLayer(for item: MediaItem) -> some View {
-        MediaCardView(item: item) { newStatus in
-            session.updateCloudStatus(newStatus, for: item.id)
+    // MARK: - Toggle row
+
+    private var toggleRow: some View {
+        HStack(spacing: 24) {
+            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { showSourcePanel.toggle() } }) {
+                HStack(spacing: 4) {
+                    Image(systemName: showSourcePanel ? "chevron.down" : "info.circle")
+                    Text(showSourcePanel ? "HIDE DETAILS" : "SOURCE")
+                        .kerning(0.5)
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(showSourcePanel ? .white : .white.opacity(0.5))
+            }
+
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.2)) { showAlbumStrip = true }
+            }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "square.grid.2x2")
+                    Text("SORT TO ALBUM")
+                        .kerning(0.5)
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.5))
+            }
         }
-        .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .offset(dragOffset)
-        .rotationEffect(.degrees(Double(dragOffset.width / 22)), anchor: .bottom)
-        .overlay(swipeOverlay(for: item))
-        .gesture(cardDragGesture)
-        .id(item.id)
     }
 
-    // MARK: - Swipe direction
+    // MARK: - Navigation gesture (horizontal swipe only)
 
-    private enum SwipeAction {
-        case skip       // swipe left
-        case keep       // swipe right
-        case delete     // swipe up
-        case favorite   // swipe down
-
-        var label: String {
-            switch self {
-            case .skip:     return "SKIP"
-            case .delete:   return "DELETE"
-            case .keep:     return "KEEP"
-            case .favorite: return "FAVORITE"
-            }
-        }
-        var icon: String {
-            switch self {
-            case .skip:     return "forward.fill"
-            case .delete:   return "trash.fill"
-            case .keep:     return "arrow.down.circle.fill"
-            case .favorite: return "star.fill"
-            }
-        }
-        var color: Color {
-            switch self {
-            case .skip:     return .gray
-            case .delete:   return .red
-            case .keep:     return .blue
-            case .favorite: return .yellow
-            }
-        }
-        var exitOffset: CGSize {
-            switch self {
-            case .skip:     return CGSize(width: -700, height: -30)
-            case .delete:   return CGSize(width: 0,    height: -700)
-            case .keep:     return CGSize(width: 700,  height: -30)
-            case .favorite: return CGSize(width: 0,    height: 900)
-            }
-        }
-    }
-
-    // Simple 1D axes: left=skip, right=keep, up=delete, down=favorite
-    private var pendingAction: SwipeAction? {
-        let x = dragOffset.width
-        let y = dragOffset.height
-        let t = swipeThreshold
-
-        if x < -t && abs(x) > abs(y) { return .skip }
-        if x > t && abs(x) > abs(y) { return .keep }
-        if y < -t && abs(y) > abs(x) { return .delete }
-        if y > t && abs(y) > abs(x) { return .favorite }
-        return nil
-    }
-
-    private var dragProgress: CGFloat {
-        let x = abs(dragOffset.width)
-        let y = abs(dragOffset.height)
-        return min(max(x, y) / swipeThreshold, 1.0)
-    }
-
-    // True while the card is being dragged toward the trash icon
-    var isDraggingToDelete: Bool { pendingAction == .delete }
-
-    // MARK: - Gesture
-
-    private var cardDragGesture: some Gesture {
+    private var navGesture: some Gesture {
         DragGesture()
             .onChanged { value in
-                dragOffset = value.translation
-            }
-            .onEnded { _ in
-                if let action = pendingAction {
-                    animateAndCommit(action)
-                } else {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                        dragOffset = .zero
-                    }
+                let isHorizontal = abs(value.translation.width) > abs(value.translation.height)
+                if isHorizontal {
+                    navDragOffset = value.translation.width
                 }
             }
-    }
+            .onEnded { value in
+                let isHorizontal = abs(value.translation.width) > abs(value.translation.height)
+                guard isHorizontal else {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { navDragOffset = 0 }
+                    return
+                }
 
-    private func animateAndCommit(_ action: SwipeAction) {
-        let generator = UIImpactFeedbackGenerator(style: .medium)
-        generator.impactOccurred()
-
-        withAnimation(.easeOut(duration: 0.25)) {
-            dragOffset = action.exitOffset
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
-            dragOffset = .zero
-            switch action {
-            case .skip:     session.skip()
-            case .keep:     if mode == .keptForLater { session.returnToUnsorted(store: assetStore) }
-                            else { session.keep(store: assetStore) }
-            case .delete:   session.delete(store: assetStore)
-            case .favorite: session.favorite()
-            }
-        }
-    }
-
-    // MARK: - Overlay
-
-    @ViewBuilder
-    private func swipeOverlay(for item: MediaItem) -> some View {
-        if let action = pendingAction {
-            let label: String = {
-                if action == .keep && mode == .keptForLater { return "RETURN" }
-                return action.label
-            }()
-            let icon: String = {
-                if action == .keep && mode == .keptForLater { return "tray.and.arrow.up.fill" }
-                return action.icon
-            }()
-            RoundedRectangle(cornerRadius: 16)
-                .fill(action.color.opacity(0.25 * dragProgress))
-                .overlay(
-                    VStack(spacing: 6) {
-                        Image(systemName: icon)
-                            .font(.system(size: 44, weight: .bold))
-                        Text(label)
-                            .font(.title2.bold())
-                            .kerning(1)
+                if value.translation.width < -navThreshold {
+                    let w = UIScreen.main.bounds.width
+                    withAnimation(.easeOut(duration: 0.2)) { navDragOffset = -w }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                        navDragOffset = 0
+                        session.moveToNext()
                     }
-                    .foregroundStyle(action.color)
-                    .opacity(Double(dragProgress))
-                )
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .allowsHitTesting(false)
-        }
+                } else if value.translation.width > navThreshold {
+                    let w = UIScreen.main.bounds.width
+                    withAnimation(.easeOut(duration: 0.2)) { navDragOffset = w }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                        navDragOffset = 0
+                        session.moveToPrevious()
+                    }
+                } else {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { navDragOffset = 0 }
+                }
+            }
     }
 }
 
@@ -296,7 +218,7 @@ struct EmptyStateView: View {
         switch mode {
         case .onThisDay:    return "calendar.badge.exclamationmark"
         case .random:       return "shuffle"
-case .unsorted:     return "checkmark.circle"
+        case .unsorted:     return "checkmark.circle"
         case .keptForLater: return "bookmark.slash"
         }
     }
@@ -305,7 +227,7 @@ case .unsorted:     return "checkmark.circle"
         switch mode {
         case .onThisDay:    return "No memories for today"
         case .random:       return "Nothing left to review"
-case .unsorted:     return "All caught up!"
+        case .unsorted:     return "All caught up!"
         case .keptForLater: return "Nothing kept for later"
         }
     }
@@ -317,7 +239,7 @@ case .unsorted:     return "All caught up!"
             formatter.dateFormat = "MMMM d"
             return "No photos or videos found for \(formatter.string(from: Date())) in past years."
         case .random:       return "All photos in your library have been organized."
-case .unsorted:     return "Every photo has been sorted, kept, or deleted."
+        case .unsorted:     return "Every photo has been sorted, kept, or deleted."
         case .keptForLater: return "Tap KEEP on any photo to save it here. Tap RETURN to send it back to Unsorted."
         }
     }
@@ -329,12 +251,14 @@ private struct HelpSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     private let items: [(String, String, String)] = [
-        ("arrow.left",           "Swipe left",  "Skip"),
-        ("arrow.right",          "Swipe right", "Keep for Later"),
-        ("arrow.up",             "Swipe up",    "Delete to Trash"),
-        ("arrow.down",           "Swipe down",  "Favorite"),
-        ("square.grid.2x2",     "Album strip", "Tap a chip to sort"),
-        ("arrow.uturn.backward", "Undo",        "Revert the last action"),
+        ("arrow.left.and.right",  "Swipe",      "Navigate between items"),
+        ("arrow.down.circle",     "Keep",       "Save to Kept for Later"),
+        ("tray.and.arrow.up",    "Return",     "Send back to Unsorted"),
+        ("forward",              "Skip",       "Skip to next item"),
+        ("trash",                "Delete",     "Move to Trash"),
+        ("square.grid.2x2",     "Sort",       "Sort to an album"),
+        ("info.circle",          "Source",     "View version & metadata"),
+        ("arrow.uturn.backward", "Undo",       "Revert the last action"),
     ]
 
     var body: some View {
@@ -355,7 +279,7 @@ private struct HelpSheet: View {
                 }
                 .scrollContentBackground(.hidden)
             }
-            .navigationTitle("Gestures")
+            .navigationTitle("Actions")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

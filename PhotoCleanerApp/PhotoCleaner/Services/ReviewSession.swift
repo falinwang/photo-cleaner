@@ -28,8 +28,11 @@ class ReviewSession {
     var undoCount: Int { undoStack.count }
     var isEmpty: Bool { items.isEmpty }
 
-    init(items: [MediaItem]) {
+    init(items: [MediaItem], startID: String? = nil) {
         self.items = items
+        if let startID, let idx = items.firstIndex(where: { $0.id == startID }) {
+            currentIndex = idx
+        }
     }
 
     // MARK: - Actions
@@ -87,6 +90,18 @@ class ReviewSession {
         let insertAt = min(record.removedAtIndex, items.count)
         items.insert(record.item, at: insertAt)
         currentIndex = insertAt
+    }
+
+    // MARK: - Navigation
+
+    func moveToNext() {
+        guard currentIndex + 1 < items.count else { return }
+        currentIndex += 1
+    }
+
+    func moveToPrevious() {
+        guard currentIndex > 0 else { return }
+        currentIndex -= 1
     }
 
     // MARK: - Helpers

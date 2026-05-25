@@ -17,10 +17,14 @@ struct HomeView: View {
             .toolbar(.hidden, for: .navigationBar)
             // Compute session directly in the destination closure — avoids nil timing bug
             .navigationDestination(item: $destination) { mode in
-                ReviewView(
-                    mode: mode,
-                    session: ReviewSession(items: library.fetchItems(for: mode, store: assetStore))
-                )
+                if mode == .onThisDay {
+                    OnThisDayView(groups: library.fetchOnThisDayGrouped(store: assetStore))
+                } else {
+                    ReviewView(
+                        mode: mode,
+                        session: ReviewSession(items: library.fetchItems(for: mode, store: assetStore))
+                    )
+                }
             }
             .sheet(isPresented: $showTrash) {
                 TrashView()
