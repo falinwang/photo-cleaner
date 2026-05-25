@@ -54,6 +54,7 @@ struct MediaCardView: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(.black.opacity(0.5), in: Capsule())
+                    .overlay(Capsule().stroke(.white.opacity(0.15), lineWidth: 0.5))
             }
         }
         .padding(12)

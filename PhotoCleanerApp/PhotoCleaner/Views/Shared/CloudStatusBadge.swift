@@ -19,6 +19,7 @@ struct CloudStatusBadge: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(color.opacity(0.15), in: Capsule())
+            .overlay(Capsule().stroke(.white.opacity(0.15), lineWidth: 0.5))
     }
 }
 

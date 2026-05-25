@@ -44,7 +44,7 @@ struct ReviewView: View {
 
                 ActionBarView(
                     mode: mode,
-                    canUndo: session.canUndo,
+                    undoCount: session.undoCount,
                     onSkip:   { animateAndCommit(.skip) },
                     onKeep:   { animateAndCommit(.keep) },
                     onReturn: { animateAndCommit(.keep) },
@@ -315,7 +315,7 @@ struct EmptyStateView: View {
         case .random:       return "All photos in your library have been organized."
         case .largestFirst: return "No large unsorted files in your library."
         case .unsorted:     return "Every photo has been sorted, kept, or deleted."
-        case .keptForLater: return "Photos you keep will appear here for review later."
+        case .keptForLater: return "Tap KEEP on any photo to save it here. Tap RETURN to send it back to Unsorted."
         }
     }
 }

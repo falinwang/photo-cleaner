@@ -25,7 +25,7 @@ enum AppMode: String, CaseIterable, Identifiable, Hashable {
         case .random:       return "Random picks from Unsorted"
         case .largestFirst: return "Biggest files first — videos first"
         case .unsorted:     return "Everything not yet organized"
-        case .keptForLater: return "Saved to review later"
+        case .keptForLater: return "Temporary bucket — review and return to Unsorted"
         }
     }
 }

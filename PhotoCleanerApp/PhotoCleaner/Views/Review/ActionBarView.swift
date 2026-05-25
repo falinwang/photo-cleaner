@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ActionBarView: View {
     let mode: AppMode
-    let canUndo: Bool
+    let undoCount: Int
     let onSkip: () -> Void
     let onKeep: () -> Void
     let onReturn: () -> Void
@@ -16,11 +16,14 @@ struct ActionBarView: View {
             // Undo strip
             HStack {
                 Button(action: onUndo) {
-                    Label("Undo", systemImage: "arrow.uturn.backward")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(canUndo ? .white : .gray)
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.uturn.backward")
+                        Text(undoCount > 1 ? "Undo (\(undoCount))" : "Undo")
+                    }
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(undoCount > 0 ? .white : .gray)
                 }
-                .disabled(!canUndo)
+                .disabled(undoCount == 0)
 
                 Spacer()
             }
@@ -29,38 +32,28 @@ struct ActionBarView: View {
 
             Divider().background(.white.opacity(0.1))
 
-            // Main action row — three equal actions
+            // Main action row — KEEP is the primary action
             HStack(spacing: 0) {
                 ActionButton(
                     label: "SKIP",
                     icon: "forward",
-                    color: .white,
+                    color: .gray,
                     action: onSkip
                 )
 
-                Divider()
-                    .frame(height: 36)
-                    .background(.white.opacity(0.15))
-
                 if isKeptForLater {
-                    ActionButton(
+                    PrimaryActionButton(
                         label: "RETURN",
                         icon: "tray.and.arrow.up",
-                        color: .blue,
                         action: onReturn
                     )
                 } else {
-                    ActionButton(
+                    PrimaryActionButton(
                         label: "KEEP",
                         icon: "arrow.down.circle",
-                        color: .white,
                         action: onKeep
                     )
                 }
-
-                Divider()
-                    .frame(height: 36)
-                    .background(.white.opacity(0.15))
 
                 ActionButton(
                     label: "DELETE",
@@ -69,9 +62,9 @@ struct ActionBarView: View {
                     action: onDelete
                 )
             }
-            .padding(.top, 4)
+            .padding(.vertical, 8)
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, 8)
         .background(.black)
     }
 }
@@ -93,7 +86,31 @@ private struct ActionButton: View {
             }
             .foregroundStyle(color)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
+            .padding(.vertical, 10)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct PrimaryActionButton: View {
+    let label: String
+    let icon: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.body)
+                Text(label)
+                    .font(.caption2.weight(.bold))
+                    .kerning(0.3)
+            }
+            .foregroundStyle(.black)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(.white, in: RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, 8)
         }
         .buttonStyle(.plain)
     }
@@ -102,7 +119,7 @@ private struct ActionButton: View {
 #Preview("Unsorted") {
     ActionBarView(
         mode: .unsorted,
-        canUndo: true,
+        undoCount: 3,
         onSkip: {},
         onKeep: {},
         onReturn: {},
@@ -115,7 +132,7 @@ private struct ActionButton: View {
 #Preview("Kept for Later") {
     ActionBarView(
         mode: .keptForLater,
-        canUndo: true,
+        undoCount: 1,
         onSkip: {},
         onKeep: {},
         onReturn: {},
