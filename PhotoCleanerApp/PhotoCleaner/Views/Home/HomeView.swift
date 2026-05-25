@@ -6,7 +6,6 @@ struct HomeView: View {
     @Environment(AssetStore.self) private var assetStore
     @Environment(PhotoLibraryService.self) private var library
     @State private var destination: AppMode? = nil
-    @State private var session: ReviewSession? = nil
 
     var body: some View {
         NavigationStack {
@@ -14,11 +13,13 @@ struct HomeView: View {
                 Color.black.ignoresSafeArea()
                 content
             }
-            .navigationBarHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
+            // Compute session directly in the destination closure — avoids nil timing bug
             .navigationDestination(item: $destination) { mode in
-                if let session {
-                    ReviewView(mode: mode, session: session)
-                }
+                ReviewView(
+                    mode: mode,
+                    session: ReviewSession(items: library.fetchItems(for: mode, store: assetStore))
+                )
             }
         }
         .task {
@@ -36,13 +37,9 @@ struct HomeView: View {
         case .authorized, .limited:
             modeList
         case .denied, .restricted:
-            PermissionView {
-                await library.requestAuthorization()
-            }
+            PermissionView { await library.requestAuthorization() }
         default:
-            PermissionView {
-                await library.requestAuthorization()
-            }
+            PermissionView { await library.requestAuthorization() }
         }
     }
 
@@ -54,11 +51,7 @@ struct HomeView: View {
                 header
                 VStack(spacing: 12) {
                     ForEach(AppMode.allCases) { mode in
-                        ModeCard(mode: mode) {
-                            let items = library.fetchItems(for: mode, store: assetStore)
-                            session = ReviewSession(items: items)
-                            destination = mode
-                        }
+                        ModeCard(mode: mode) { destination = mode }
                     }
                 }
                 .padding(.horizontal)

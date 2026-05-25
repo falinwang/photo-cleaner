@@ -12,7 +12,7 @@ struct ReviewView: View {
             Color.black.ignoresSafeArea()
 
             if session.isEmpty {
-                emptyState
+                EmptyStateView(mode: mode, onBack: { dismiss() })
             } else {
                 VStack(spacing: 0) {
                     TopBarView(
@@ -36,44 +36,118 @@ struct ReviewView: View {
 
                     ActionBarView(
                         canUndo: session.canUndo,
-                        onSkip:    { session.skip() },
-                        onKeep:    { session.keep(store: assetStore) },
-                        onDelete:  { session.delete(store: assetStore) },
+                        onSkip:     { session.skip() },
+                        onKeep:     { session.keep(store: assetStore) },
+                        onDelete:   { session.delete(store: assetStore) },
                         onFavorite: { session.favorite() },
-                        onUndo:    { session.undo(store: assetStore) },
-                        onHelp:    { showHelp = true }
+                        onUndo:     { session.undo(store: assetStore) },
+                        onHelp:     { showHelp = true }
                     )
 
                     AlbumStripView(
                         albums: MockAlbum.mockAlbums,
-                        onSelect: { album in
-                            session.sortToAlbum(albumID: album.id, store: assetStore)
-                        },
-                        onSeeAll: { /* AlbumPickerView in M2 */ }
+                        onSelect: { album in session.sortToAlbum(albumID: album.id, store: assetStore) },
+                        onSeeAll: {}
                     )
                 }
             }
         }
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showHelp) { HelpSheet() }
     }
+}
 
-    private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "checkmark.circle")
-                .font(.system(size: 56))
-                .foregroundStyle(.green)
-            Text("All done!")
-                .font(.title2.bold())
-                .foregroundStyle(.white)
-            Text("Nothing left to review in \(mode.rawValue).")
-                .font(.subheadline)
-                .foregroundStyle(.gray)
-                .multilineTextAlignment(.center)
-            Button("Go back") { dismiss() }
-                .foregroundStyle(.blue)
+// MARK: - Empty State
+
+struct EmptyStateView: View {
+    let mode: AppMode
+    let onBack: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Top bar
+            HStack {
+                Button(action: onBack) {
+                    Image(systemName: "xmark")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 36, height: 36)
+                        .background(.white.opacity(0.1), in: Circle())
+                }
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.top, 4)
+
+            Spacer()
+
+            VStack(spacing: 20) {
+                Image(systemName: emptyIcon)
+                    .font(.system(size: 64))
+                    .foregroundStyle(.white.opacity(0.25))
+
+                VStack(spacing: 8) {
+                    Text(emptyTitle)
+                        .font(.title3.bold())
+                        .foregroundStyle(.white)
+                    Text(emptyMessage)
+                        .font(.subheadline)
+                        .foregroundStyle(.gray)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                }
+
+                Button(action: onBack) {
+                    Text("Back to Home")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .background(.white, in: Capsule())
+                }
+                .padding(.top, 8)
+            }
+
+            Spacer()
         }
-        .padding()
+    }
+
+    private var emptyIcon: String {
+        switch mode {
+        case .onThisDay:    return "calendar.badge.exclamationmark"
+        case .random:       return "shuffle"
+        case .largestFirst: return "checkmark.seal"
+        case .unsorted:     return "checkmark.circle"
+        case .keptForLater: return "bookmark.slash"
+        }
+    }
+
+    private var emptyTitle: String {
+        switch mode {
+        case .onThisDay:    return "No memories for today"
+        case .random:       return "Nothing left to review"
+        case .largestFirst: return "No large files found"
+        case .unsorted:     return "All caught up!"
+        case .keptForLater: return "Nothing kept for later"
+        }
+    }
+
+    private var emptyMessage: String {
+        switch mode {
+        case .onThisDay:
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMMM d"
+            let dateStr = formatter.string(from: Date())
+            return "No photos or videos found for \(dateStr) in past years."
+        case .random:
+            return "All photos in your library have been organized."
+        case .largestFirst:
+            return "No large unsorted files in your library."
+        case .unsorted:
+            return "Every photo has been sorted, kept, or deleted."
+        case .keptForLater:
+            return "Photos you keep will appear here for review later."
+        }
     }
 }
 
@@ -82,20 +156,20 @@ struct ReviewView: View {
 private struct HelpSheet: View {
     @Environment(\.dismiss) private var dismiss
 
-    private let gestures: [(String, String, String)] = [
-        ("forward", "Skip",         "Defer — item stays in queue"),
-        ("arrow.down.circle", "Keep", "Move to Kept for Later"),
-        ("xmark.circle", "Delete",  "Move to in-app Trash"),
-        ("square.grid.2x2", "Sort", "Tap an album chip below"),
-        ("star", "Favorite",        "Mark as iOS Favorite"),
-        ("arrow.uturn.backward", "Undo", "Revert the last action"),
+    private let items: [(String, String, String)] = [
+        ("forward",              "Skip",     "Defer — item stays in queue"),
+        ("arrow.down.circle",   "Keep",     "Move to Kept for Later"),
+        ("xmark.circle",        "Delete",   "Move to in-app Trash"),
+        ("square.grid.2x2",    "Sort",     "Tap an album chip below the card"),
+        ("star",                "Favorite", "Mark as iOS Favorite"),
+        ("arrow.uturn.backward","Undo",     "Revert the last action"),
     ]
 
     var body: some View {
         NavigationStack {
             ZStack {
                 Color.black.ignoresSafeArea()
-                List(gestures, id: \.0) { icon, title, detail in
+                List(items, id: \.0) { icon, title, detail in
                     HStack(spacing: 14) {
                         Image(systemName: icon)
                             .frame(width: 28)
@@ -127,4 +201,8 @@ private struct HelpSheet: View {
         session: ReviewSession(items: MediaItem.mockItems)
     )
     .environment(AssetStore())
+}
+
+#Preview("Empty — On This Day") {
+    EmptyStateView(mode: .onThisDay, onBack: {})
 }
