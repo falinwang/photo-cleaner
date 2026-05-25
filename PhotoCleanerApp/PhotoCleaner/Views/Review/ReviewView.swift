@@ -292,8 +292,7 @@ struct EmptyStateView: View {
         switch mode {
         case .onThisDay:    return "calendar.badge.exclamationmark"
         case .random:       return "shuffle"
-        case .largestFirst: return "checkmark.seal"
-        case .unsorted:     return "checkmark.circle"
+case .unsorted:     return "checkmark.circle"
         case .keptForLater: return "bookmark.slash"
         }
     }
@@ -302,8 +301,7 @@ struct EmptyStateView: View {
         switch mode {
         case .onThisDay:    return "No memories for today"
         case .random:       return "Nothing left to review"
-        case .largestFirst: return "No large files found"
-        case .unsorted:     return "All caught up!"
+case .unsorted:     return "All caught up!"
         case .keptForLater: return "Nothing kept for later"
         }
     }
@@ -315,8 +313,7 @@ struct EmptyStateView: View {
             formatter.dateFormat = "MMMM d"
             return "No photos or videos found for \(formatter.string(from: Date())) in past years."
         case .random:       return "All photos in your library have been organized."
-        case .largestFirst: return "No large unsorted files in your library."
-        case .unsorted:     return "Every photo has been sorted, kept, or deleted."
+case .unsorted:     return "Every photo has been sorted, kept, or deleted."
         case .keptForLater: return "Tap KEEP on any photo to save it here. Tap RETURN to send it back to Unsorted."
         }
     }

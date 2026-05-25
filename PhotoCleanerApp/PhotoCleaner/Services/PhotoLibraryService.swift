@@ -18,8 +18,6 @@ class PhotoLibraryService {
 
     func fetchItems(for mode: AppMode, store: AssetStore) -> [MediaItem] {
         switch mode {
-        case .largestFirst:
-            return fetchLargestFirst(store: store)
         case .keptForLater:
             return fetchKeptForLater(store: store)
         default:
@@ -55,32 +53,6 @@ class PhotoLibraryService {
 
         if mode == .random { items.shuffle() }
         return items
-    }
-
-    private func fetchLargestFirst(store: AssetStore) -> [MediaItem] {
-        let options = PHFetchOptions()
-        options.includeHiddenAssets = false
-        options.includeAllBurstAssets = false
-        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
-
-        var items: [MediaItem] = []
-
-        // Videos first
-        let videos = PHAsset.fetchAssets(with: .video, options: options)
-        videos.enumerateObjects { asset, _, _ in
-            guard store.isUnsorted(asset.localIdentifier) else { return }
-            items.append(self.makeItem(from: asset))
-        }
-
-        // Then photos
-        let photos = PHAsset.fetchAssets(with: .image, options: options)
-        photos.enumerateObjects { asset, _, _ in
-            guard store.isUnsorted(asset.localIdentifier) else { return }
-            items.append(self.makeItem(from: asset))
-        }
-
-        // Sort each group by descending file size
-        return items.sorted { ($0.fileSize ?? 0) > ($1.fileSize ?? 0) }
     }
 
     private func fetchKeptForLater(store: AssetStore) -> [MediaItem] {
