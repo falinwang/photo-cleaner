@@ -25,9 +25,8 @@ struct MediaCardView: View {
         if let image {
             Image(uiImage: image)
                 .resizable()
-                .scaledToFill()
+                .scaledToFit()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
         } else {
             placeholder
         }
