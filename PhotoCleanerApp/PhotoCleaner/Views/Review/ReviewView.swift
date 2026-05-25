@@ -12,61 +12,68 @@ struct ReviewView: View {
     private let swipeThreshold: CGFloat = 90
 
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
+        // Use VStack + .background instead of ZStack — avoids width-constraint issues
+        // that appear when a VStack is a child of ZStack with ignoresSafeArea content.
+        contentView
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.black.ignoresSafeArea())
+            .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $showHelp) { HelpSheet() }
+    }
 
-            if session.isEmpty {
-                EmptyStateView(mode: mode, onBack: { dismiss() })
-            } else {
-                VStack(spacing: 0) {
-                    TopBarView(
-                        mode: mode,
-                        item: session.currentItem,
-                        progressText: session.progressText,
-                        onClose: { dismiss() },
-                        onTrash: { session.delete(store: assetStore) }
-                    )
+    @ViewBuilder
+    private var contentView: some View {
+        if session.isEmpty {
+            EmptyStateView(mode: mode, onBack: { dismiss() })
+        } else {
+            VStack(spacing: 0) {
+                TopBarView(
+                    mode: mode,
+                    item: session.currentItem,
+                    progressText: session.progressText,
+                    onClose: { dismiss() },
+                    onTrash: { session.delete(store: assetStore) }
+                )
 
-                    if let item = session.currentItem {
-                        MediaCardView(item: item) { newStatus in
-                            session.updateCloudStatus(newStatus, for: item.id)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: UIScreen.main.bounds.height * 0.53)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        // Gesture transforms
-                        .offset(dragOffset)
-                        .rotationEffect(.degrees(Double(dragOffset.width / 22)), anchor: .bottom)
-                        .overlay(swipeOverlay(for: item))
-                        .gesture(cardDragGesture)
-                        // Reset position when item changes
-                        .id(item.id)
-                    }
-
-                    Spacer(minLength: 0)
-
-                    ActionBarView(
-                        canUndo: session.canUndo,
-                        onSkip:     { animateAndCommit(.skip) },
-                        onKeep:     { animateAndCommit(.keep) },
-                        onDelete:   { animateAndCommit(.delete) },
-                        onFavorite: { animateAndCommit(.favorite) },
-                        onUndo:     { session.undo(store: assetStore) },
-                        onHelp:     { showHelp = true }
-                    )
-
-                    AlbumStripView(
-                        albums: MockAlbum.mockAlbums,
-                        onSelect: { album in session.sortToAlbum(albumID: album.id, store: assetStore) },
-                        onSeeAll: {}
-                    )
+                if let item = session.currentItem {
+                    cardLayer(for: item)
                 }
-                .frame(maxWidth: .infinity)
+
+                Spacer(minLength: 0)
+
+                ActionBarView(
+                    canUndo: session.canUndo,
+                    onSkip:     { animateAndCommit(.skip) },
+                    onKeep:     { animateAndCommit(.keep) },
+                    onDelete:   { animateAndCommit(.delete) },
+                    onFavorite: { animateAndCommit(.favorite) },
+                    onUndo:     { session.undo(store: assetStore) },
+                    onHelp:     { showHelp = true }
+                )
+
+                AlbumStripView(
+                    albums: MockAlbum.mockAlbums,
+                    onSelect: { album in session.sortToAlbum(albumID: album.id, store: assetStore) },
+                    onSeeAll: {}
+                )
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .toolbar(.hidden, for: .navigationBar)
-        .sheet(isPresented: $showHelp) { HelpSheet() }
+    }
+
+    private func cardLayer(for item: MediaItem) -> some View {
+        MediaCardView(item: item) { newStatus in
+            session.updateCloudStatus(newStatus, for: item.id)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: UIScreen.main.bounds.height * 0.53)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .offset(dragOffset)
+        .rotationEffect(.degrees(Double(dragOffset.width / 22)), anchor: .bottom)
+        .overlay(swipeOverlay(for: item))
+        .gesture(cardDragGesture)
+        .id(item.id)
     }
 
     // MARK: - Swipe direction

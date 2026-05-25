@@ -50,6 +50,7 @@ struct TopBarView: View {
                 .font(.caption)
             }
         }
+        .frame(maxWidth: .infinity)
         .padding(.horizontal)
         .padding(.top, 4)
     }
