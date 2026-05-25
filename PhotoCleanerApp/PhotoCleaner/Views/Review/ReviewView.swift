@@ -7,6 +7,10 @@ struct ReviewView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showHelp = false
 
+    // MARK: - Gesture state
+    @State private var dragOffset: CGSize = .zero
+    private let swipeThreshold: CGFloat = 90
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -31,16 +35,23 @@ struct ReviewView: View {
                         .frame(height: UIScreen.main.bounds.height * 0.53)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
+                        // Gesture transforms
+                        .offset(dragOffset)
+                        .rotationEffect(.degrees(Double(dragOffset.width / 22)), anchor: .bottom)
+                        .overlay(swipeOverlay(for: item))
+                        .gesture(cardDragGesture)
+                        // Reset position when item changes
+                        .id(item.id)
                     }
 
                     Spacer(minLength: 0)
 
                     ActionBarView(
                         canUndo: session.canUndo,
-                        onSkip:     { session.skip() },
-                        onKeep:     { session.keep(store: assetStore) },
-                        onDelete:   { session.delete(store: assetStore) },
-                        onFavorite: { session.favorite() },
+                        onSkip:     { animateAndCommit(.skip) },
+                        onKeep:     { animateAndCommit(.keep) },
+                        onDelete:   { animateAndCommit(.delete) },
+                        onFavorite: { animateAndCommit(.favorite) },
                         onUndo:     { session.undo(store: assetStore) },
                         onHelp:     { showHelp = true }
                     )
@@ -57,6 +68,124 @@ struct ReviewView: View {
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showHelp) { HelpSheet() }
     }
+
+    // MARK: - Swipe direction
+
+    private enum SwipeAction {
+        case skip, keep, delete, favorite
+
+        var label: String {
+            switch self {
+            case .skip:     return "SKIP"
+            case .keep:     return "KEEP"
+            case .delete:   return "DELETE"
+            case .favorite: return "FAVORITE"
+            }
+        }
+        var icon: String {
+            switch self {
+            case .skip:     return "forward.fill"
+            case .keep:     return "arrow.down.circle.fill"
+            case .delete:   return "xmark.circle.fill"
+            case .favorite: return "star.fill"
+            }
+        }
+        var color: Color {
+            switch self {
+            case .skip:     return .gray
+            case .keep:     return .blue
+            case .delete:   return .red
+            case .favorite: return .yellow
+            }
+        }
+        var exitOffset: CGSize {
+            switch self {
+            case .skip:     return CGSize(width: -700, height: -50)
+            case .keep:     return CGSize(width: 700,  height: -50)
+            case .delete:   return CGSize(width: 0,    height: -900)
+            case .favorite: return CGSize(width: 0,    height: 900)
+            }
+        }
+    }
+
+    private var pendingAction: SwipeAction? {
+        let x = dragOffset.width
+        let y = dragOffset.height
+        if abs(x) >= abs(y) {
+            if x < -swipeThreshold { return .skip }
+            if x >  swipeThreshold { return .keep }
+        } else {
+            if y < -swipeThreshold { return .delete }
+            if y >  swipeThreshold { return .favorite }
+        }
+        return nil
+    }
+
+    private var dragProgress: CGFloat {
+        let x = abs(dragOffset.width)
+        let y = abs(dragOffset.height)
+        return min(max(x, y) / swipeThreshold, 1.0)
+    }
+
+    // MARK: - Gesture
+
+    private var cardDragGesture: some Gesture {
+        DragGesture()
+            .onChanged { value in
+                dragOffset = value.translation
+            }
+            .onEnded { _ in
+                if let action = pendingAction {
+                    animateAndCommit(action)
+                } else {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                        dragOffset = .zero
+                    }
+                }
+            }
+    }
+
+    private func animateAndCommit(_ action: SwipeAction) {
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
+
+        withAnimation(.easeOut(duration: 0.25)) {
+            dragOffset = action.exitOffset
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+            dragOffset = .zero
+            switch action {
+            case .skip:     session.skip()
+            case .keep:     session.keep(store: assetStore)
+            case .delete:   session.delete(store: assetStore)
+            case .favorite: session.favorite()
+            }
+        }
+    }
+
+    // MARK: - Overlay
+
+    @ViewBuilder
+    private func swipeOverlay(for item: MediaItem) -> some View {
+        if let action = pendingAction {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(action.color.opacity(0.25 * dragProgress))
+                .overlay(
+                    VStack(spacing: 6) {
+                        Image(systemName: action.icon)
+                            .font(.system(size: 44, weight: .bold))
+                        Text(action.label)
+                            .font(.title2.bold())
+                            .kerning(1)
+                    }
+                    .foregroundStyle(action.color)
+                    .opacity(Double(dragProgress))
+                )
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .allowsHitTesting(false)
+        }
+    }
 }
 
 // MARK: - Empty State
@@ -67,7 +196,6 @@ struct EmptyStateView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Top bar
             HStack {
                 Button(action: onBack) {
                     Image(systemName: "xmark")
@@ -139,16 +267,11 @@ struct EmptyStateView: View {
         case .onThisDay:
             let formatter = DateFormatter()
             formatter.dateFormat = "MMMM d"
-            let dateStr = formatter.string(from: Date())
-            return "No photos or videos found for \(dateStr) in past years."
-        case .random:
-            return "All photos in your library have been organized."
-        case .largestFirst:
-            return "No large unsorted files in your library."
-        case .unsorted:
-            return "Every photo has been sorted, kept, or deleted."
-        case .keptForLater:
-            return "Photos you keep will appear here for review later."
+            return "No photos or videos found for \(formatter.string(from: Date())) in past years."
+        case .random:       return "All photos in your library have been organized."
+        case .largestFirst: return "No large unsorted files in your library."
+        case .unsorted:     return "Every photo has been sorted, kept, or deleted."
+        case .keptForLater: return "Photos you keep will appear here for review later."
         }
     }
 }
@@ -159,12 +282,12 @@ private struct HelpSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     private let items: [(String, String, String)] = [
-        ("forward",              "Skip",     "Defer — item stays in queue"),
-        ("arrow.down.circle",   "Keep",     "Move to Kept for Later"),
-        ("xmark.circle",        "Delete",   "Move to in-app Trash"),
-        ("square.grid.2x2",    "Sort",     "Tap an album chip below the card"),
-        ("star",                "Favorite", "Mark as iOS Favorite"),
-        ("arrow.uturn.backward","Undo",     "Revert the last action"),
+        ("arrow.left",           "Swipe left",  "Skip — stays in queue"),
+        ("arrow.right",          "Swipe right", "Keep for Later"),
+        ("arrow.up",             "Swipe up",    "Delete to Trash"),
+        ("arrow.down",           "Swipe down",  "Favorite"),
+        ("square.grid.2x2",     "Album strip", "Tap a chip to sort"),
+        ("arrow.uturn.backward", "Undo",        "Revert the last action"),
     ]
 
     var body: some View {
@@ -185,7 +308,7 @@ private struct HelpSheet: View {
                 }
                 .scrollContentBackground(.hidden)
             }
-            .navigationTitle("How it works")
+            .navigationTitle("Gestures")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -205,6 +328,6 @@ private struct HelpSheet: View {
     .environment(AssetStore())
 }
 
-#Preview("Empty — On This Day") {
+#Preview("Empty") {
     EmptyStateView(mode: .onThisDay, onBack: {})
 }
