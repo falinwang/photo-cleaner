@@ -37,9 +37,13 @@ struct ActionBarView: View {
                 ActionButton(
                     label: "SKIP",
                     icon: "forward",
-                    color: .gray,
+                    color: .white.opacity(0.7),
                     action: onSkip
                 )
+
+                Divider()
+                    .frame(width: 1, height: 32)
+                    .background(.white.opacity(0.12))
 
                 if isKeptForLater {
                     PrimaryActionButton(
@@ -54,6 +58,10 @@ struct ActionBarView: View {
                         action: onKeep
                     )
                 }
+
+                Divider()
+                    .frame(width: 1, height: 32)
+                    .background(.white.opacity(0.12))
 
                 ActionButton(
                     label: "DELETE",
@@ -107,10 +115,10 @@ private struct PrimaryActionButton: View {
                     .kerning(0.3)
             }
             .foregroundStyle(.black)
-            .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity)
             .background(.white, in: RoundedRectangle(cornerRadius: 12))
-            .padding(.horizontal, 8)
         }
         .buttonStyle(.plain)
     }

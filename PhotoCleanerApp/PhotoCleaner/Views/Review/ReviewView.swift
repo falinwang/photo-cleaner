@@ -42,6 +42,8 @@ struct ReviewView: View {
                     cardLayer(for: item)
                 }
 
+                Spacer(minLength: 0)
+
                 ActionBarView(
                     mode: mode,
                     undoCount: session.undoCount,
@@ -88,9 +90,9 @@ struct ReviewView: View {
         MediaCardView(item: item) { newStatus in
             session.updateCloudStatus(newStatus, for: item.id)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .offset(dragOffset)
         .rotationEffect(.degrees(Double(dragOffset.width / 22)), anchor: .bottom)
         .overlay(swipeOverlay(for: item))
