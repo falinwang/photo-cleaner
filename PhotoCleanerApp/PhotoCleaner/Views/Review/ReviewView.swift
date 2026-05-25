@@ -14,45 +14,44 @@ struct ReviewView: View {
             if session.isEmpty {
                 EmptyStateView(mode: mode, onBack: { dismiss() })
             } else {
-                GeometryReader { proxy in
-                    VStack(spacing: 0) {
-                        TopBarView(
-                            mode: mode,
-                            item: session.currentItem,
-                            progressText: session.progressText,
-                            onClose: { dismiss() },
-                            onTrash: { session.delete(store: assetStore) }
-                        )
+                VStack(spacing: 0) {
+                    TopBarView(
+                        mode: mode,
+                        item: session.currentItem,
+                        progressText: session.progressText,
+                        onClose: { dismiss() },
+                        onTrash: { session.delete(store: assetStore) }
+                    )
 
-                        if let item = session.currentItem {
-                            MediaCardView(item: item) { newStatus in
-                                session.updateCloudStatus(newStatus, for: item.id)
-                            }
-                            .padding(.horizontal)
-                            .padding(.vertical, 10)
-                            // Card takes remaining space after top bar + action bar + album strip
-                            .frame(height: proxy.size.height * 0.56)
+                    if let item = session.currentItem {
+                        MediaCardView(item: item) { newStatus in
+                            session.updateCloudStatus(newStatus, for: item.id)
                         }
-
-                        Spacer(minLength: 0)
-
-                        ActionBarView(
-                            canUndo: session.canUndo,
-                            onSkip:     { session.skip() },
-                            onKeep:     { session.keep(store: assetStore) },
-                            onDelete:   { session.delete(store: assetStore) },
-                            onFavorite: { session.favorite() },
-                            onUndo:     { session.undo(store: assetStore) },
-                            onHelp:     { showHelp = true }
-                        )
-
-                        AlbumStripView(
-                            albums: MockAlbum.mockAlbums,
-                            onSelect: { album in session.sortToAlbum(albumID: album.id, store: assetStore) },
-                            onSeeAll: {}
-                        )
+                        .frame(maxWidth: .infinity)
+                        .frame(height: UIScreen.main.bounds.height * 0.53)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
                     }
+
+                    Spacer(minLength: 0)
+
+                    ActionBarView(
+                        canUndo: session.canUndo,
+                        onSkip:     { session.skip() },
+                        onKeep:     { session.keep(store: assetStore) },
+                        onDelete:   { session.delete(store: assetStore) },
+                        onFavorite: { session.favorite() },
+                        onUndo:     { session.undo(store: assetStore) },
+                        onHelp:     { showHelp = true }
+                    )
+
+                    AlbumStripView(
+                        albums: MockAlbum.mockAlbums,
+                        onSelect: { album in session.sortToAlbum(albumID: album.id, store: assetStore) },
+                        onSeeAll: {}
+                    )
                 }
+                .frame(maxWidth: .infinity)
             }
         }
         .toolbar(.hidden, for: .navigationBar)
