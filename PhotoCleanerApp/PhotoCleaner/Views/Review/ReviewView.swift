@@ -27,64 +27,68 @@ struct ReviewView: View {
         if session.isEmpty {
             EmptyStateView(mode: mode, onBack: { dismiss() })
         } else {
-            VStack(spacing: 0) {
-                TopBarView(
-                    mode: mode,
-                    item: session.currentItem,
-                    progressText: session.progressText,
-                    trashHighlighted: isDraggingToDelete,
-                    onClose: { dismiss() },
-                    onHelp: { showHelp = true },
-                    onTrash: { animateAndCommit(.delete) }
-                )
-
-                if let item = session.currentItem {
-                    cardLayer(for: item)
-                }
-
-                Spacer(minLength: 0)
-
-                ActionBarView(
-                    mode: mode,
-                    undoCount: session.undoCount,
-                    onSkip:   { animateAndCommit(.skip) },
-                    onKeep:   { animateAndCommit(.keep) },
-                    onReturn: { animateAndCommit(.keep) },
-                    onDelete: { animateAndCommit(.delete) },
-                    onUndo:   { session.undo(store: assetStore) }
-                )
-
-                // Sort-to-album strip — collapsed by default to keep the card prominent
-                if showAlbumStrip {
-                    AlbumStripView(
-                        albums: MockAlbum.mockAlbums,
-                        onSelect: { album in
-                            session.sortToAlbum(albumID: album.id, store: assetStore)
-                            withAnimation(.easeInOut(duration: 0.2)) { showAlbumStrip = false }
-                        },
-                        onDismiss: {
-                            withAnimation(.easeInOut(duration: 0.2)) { showAlbumStrip = false }
-                        }
+            GeometryReader { geo in
+                VStack(spacing: 0) {
+                    TopBarView(
+                        mode: mode,
+                        item: session.currentItem,
+                        progressText: session.progressText,
+                        trashHighlighted: isDraggingToDelete,
+                        onClose: { dismiss() },
+                        onHelp: { showHelp = true },
+                        onTrash: { animateAndCommit(.delete) }
                     )
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                } else {
-                    Button(action: {
-                        withAnimation(.easeInOut(duration: 0.2)) { showAlbumStrip = true }
-                    }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "square.grid.2x2")
-                            Text("SORT TO ALBUM")
-                                .kerning(0.5)
+
+                    if let item = session.currentItem {
+                        cardLayer(for: item)
+                            .frame(height: geo.size.height - topBarHeight - actionBarHeight - albumToggleHeight)
+                    }
+
+                    ActionBarView(
+                        mode: mode,
+                        undoCount: session.undoCount,
+                        onSkip:   { animateAndCommit(.skip) },
+                        onKeep:   { animateAndCommit(.keep) },
+                        onReturn: { animateAndCommit(.keep) },
+                        onDelete: { animateAndCommit(.delete) },
+                        onUndo:   { session.undo(store: assetStore) }
+                    )
+
+                    if showAlbumStrip {
+                        AlbumStripView(
+                            albums: MockAlbum.mockAlbums,
+                            onSelect: { album in
+                                session.sortToAlbum(albumID: album.id, store: assetStore)
+                                withAnimation(.easeInOut(duration: 0.2)) { showAlbumStrip = false }
+                            },
+                            onDismiss: {
+                                withAnimation(.easeInOut(duration: 0.2)) { showAlbumStrip = false }
+                            }
+                        )
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    } else {
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.2)) { showAlbumStrip = true }
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "square.grid.2x2")
+                                Text("SORT TO ALBUM")
+                                    .kerning(0.5)
+                            }
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.5))
+                            .padding(.vertical, 10)
                         }
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.5))
-                        .padding(.vertical, 10)
                     }
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
     }
+
+    // Approximate heights for layout calculation
+    private let topBarHeight: CGFloat = 72
+    private let actionBarHeight: CGFloat = 110
+    private let albumToggleHeight: CGFloat = 34
 
     private func cardLayer(for item: MediaItem) -> some View {
         MediaCardView(item: item) { newStatus in
