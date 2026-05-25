@@ -6,6 +6,7 @@ struct ReviewView: View {
     @Environment(AssetStore.self) private var assetStore
     @Environment(\.dismiss) private var dismiss
     @State private var showHelp = false
+    @State private var showAlbumStrip = false
 
     // MARK: - Gesture state
     @State private var dragOffset: CGSize = .zero
@@ -33,6 +34,7 @@ struct ReviewView: View {
                     progressText: session.progressText,
                     trashHighlighted: isDraggingToDelete,
                     onClose: { dismiss() },
+                    onHelp: { showHelp = true },
                     onTrash: { animateAndCommit(.delete) }
                 )
 
@@ -40,23 +42,43 @@ struct ReviewView: View {
                     cardLayer(for: item)
                 }
 
-                Spacer(minLength: 0)
-
                 ActionBarView(
+                    mode: mode,
                     canUndo: session.canUndo,
-                    onSkip:     { animateAndCommit(.skip) },
-                    onKeep:     { animateAndCommit(.keep) },
-                    onDelete:   { animateAndCommit(.delete) },
-                    onFavorite: { animateAndCommit(.favorite) },
-                    onUndo:     { session.undo(store: assetStore) },
-                    onHelp:     { showHelp = true }
+                    onSkip:   { animateAndCommit(.skip) },
+                    onKeep:   { animateAndCommit(.keep) },
+                    onReturn: { animateAndCommit(.keep) },
+                    onDelete: { animateAndCommit(.delete) },
+                    onUndo:   { session.undo(store: assetStore) }
                 )
 
-                AlbumStripView(
-                    albums: MockAlbum.mockAlbums,
-                    onSelect: { album in session.sortToAlbum(albumID: album.id, store: assetStore) },
-                    onSeeAll: {}
-                )
+                // Sort-to-album strip — collapsed by default to keep the card prominent
+                if showAlbumStrip {
+                    AlbumStripView(
+                        albums: MockAlbum.mockAlbums,
+                        onSelect: { album in
+                            session.sortToAlbum(albumID: album.id, store: assetStore)
+                            withAnimation(.easeInOut(duration: 0.2)) { showAlbumStrip = false }
+                        },
+                        onDismiss: {
+                            withAnimation(.easeInOut(duration: 0.2)) { showAlbumStrip = false }
+                        }
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                } else {
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.2)) { showAlbumStrip = true }
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "square.grid.2x2")
+                            Text("SORT TO ALBUM")
+                                .kerning(0.5)
+                        }
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .padding(.vertical, 10)
+                    }
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
@@ -66,8 +88,7 @@ struct ReviewView: View {
         MediaCardView(item: item) { newStatus in
             session.updateCloudStatus(newStatus, for: item.id)
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: UIScreen.main.bounds.height * 0.53)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .offset(dragOffset)
@@ -81,8 +102,8 @@ struct ReviewView: View {
 
     private enum SwipeAction {
         case skip       // swipe left
-        case delete     // swipe toward top-right (toward trash icon)
-        case keep       // swipe right (flat)
+        case keep       // swipe right
+        case delete     // swipe up
         case favorite   // swipe down
 
         var label: String {
@@ -109,32 +130,26 @@ struct ReviewView: View {
             case .favorite: return .yellow
             }
         }
-        // Card flies toward the trash can (top-right corner) for delete,
-        // off-left for skip, off-right for keep, downward for favorite.
         var exitOffset: CGSize {
             switch self {
             case .skip:     return CGSize(width: -700, height: -30)
-            case .delete:   return CGSize(width: 500,  height: -800)
+            case .delete:   return CGSize(width: 0,    height: -700)
             case .keep:     return CGSize(width: 700,  height: -30)
             case .favorite: return CGSize(width: 0,    height: 900)
             }
         }
     }
 
-    // Detect top-right diagonal as delete; plain left as skip.
+    // Simple 1D axes: left=skip, right=keep, up=delete, down=favorite
     private var pendingAction: SwipeAction? {
         let x = dragOffset.width
         let y = dragOffset.height
         let t = swipeThreshold
 
-        // Top-right diagonal → delete (x rightward AND y upward)
-        if x > t * 0.6 && y < -(t * 0.6) { return .delete }
-        // Left → skip
-        if x < -t && abs(x) > abs(y) * 0.8 { return .skip }
-        // Down → favorite
+        if x < -t && abs(x) > abs(y) { return .skip }
+        if x > t && abs(x) > abs(y) { return .keep }
+        if y < -t && abs(y) > abs(x) { return .delete }
         if y > t && abs(y) > abs(x) { return .favorite }
-        // Right (flat) → keep
-        if x > t && abs(x) > abs(y) * 1.5 { return .keep }
         return nil
     }
 
@@ -176,7 +191,8 @@ struct ReviewView: View {
             dragOffset = .zero
             switch action {
             case .skip:     session.skip()
-            case .keep:     session.keep(store: assetStore)
+            case .keep:     if mode == .keptForLater { session.returnToUnsorted(store: assetStore) }
+                            else { session.keep(store: assetStore) }
             case .delete:   session.delete(store: assetStore)
             case .favorite: session.favorite()
             }
@@ -188,13 +204,21 @@ struct ReviewView: View {
     @ViewBuilder
     private func swipeOverlay(for item: MediaItem) -> some View {
         if let action = pendingAction {
+            let label: String = {
+                if action == .keep && mode == .keptForLater { return "RETURN" }
+                return action.label
+            }()
+            let icon: String = {
+                if action == .keep && mode == .keptForLater { return "tray.and.arrow.up.fill" }
+                return action.icon
+            }()
             RoundedRectangle(cornerRadius: 16)
                 .fill(action.color.opacity(0.25 * dragProgress))
                 .overlay(
                     VStack(spacing: 6) {
-                        Image(systemName: action.icon)
+                        Image(systemName: icon)
                             .font(.system(size: 44, weight: .bold))
-                        Text(action.label)
+                        Text(label)
                             .font(.title2.bold())
                             .kerning(1)
                     }
@@ -302,7 +326,7 @@ private struct HelpSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     private let items: [(String, String, String)] = [
-        ("arrow.left",           "Swipe left",  "Skip — stays in queue"),
+        ("arrow.left",           "Swipe left",  "Skip"),
         ("arrow.right",          "Swipe right", "Keep for Later"),
         ("arrow.up",             "Swipe up",    "Delete to Trash"),
         ("arrow.down",           "Swipe down",  "Favorite"),

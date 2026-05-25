@@ -47,6 +47,13 @@ class ReviewSession {
         removeCurrentAndAdjust()
     }
 
+    func returnToUnsorted(store: AssetStore) {
+        guard let item = currentItem else { return }
+        lastUndo = UndoRecord(item: item, removedAtIndex: currentIndex)
+        store.keptForLaterIDs.remove(item.id)
+        removeCurrentAndAdjust()
+    }
+
     func delete(store: AssetStore) {
         guard let item = currentItem else { return }
         lastUndo = UndoRecord(item: item, removedAtIndex: currentIndex)

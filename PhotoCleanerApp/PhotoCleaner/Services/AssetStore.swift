@@ -18,6 +18,14 @@ class AssetStore {
         !keptForLaterIDs.contains(id) && !trashedIDs.contains(id) && !sortedIDs.contains(id)
     }
 
+    /// Clears all three buckets so every asset becomes Unsorted again.
+    /// Does not touch Photos.app (no album removal, no favorite changes, no real deletes).
+    func reset() {
+        keptForLaterIDs = []
+        trashedIDs = []
+        sortedIDs = []
+    }
+
     private func persist() {
         let d = UserDefaults.standard
         d.set(Array(keptForLaterIDs), forKey: "keptForLaterIDs")

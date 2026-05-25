@@ -6,6 +6,7 @@ struct HomeView: View {
     @Environment(AssetStore.self) private var assetStore
     @Environment(PhotoLibraryService.self) private var library
     @State private var destination: AppMode? = nil
+    @State private var showTrash = false
 
     var body: some View {
         NavigationStack {
@@ -20,6 +21,10 @@ struct HomeView: View {
                     mode: mode,
                     session: ReviewSession(items: library.fetchItems(for: mode, store: assetStore))
                 )
+            }
+            .sheet(isPresented: $showTrash) {
+                TrashView()
+                    .environment(assetStore)
             }
         }
         .task {
@@ -61,13 +66,35 @@ struct HomeView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Photo Cleaner")
-                .font(.largeTitle.bold())
-                .foregroundStyle(.white)
-            Text(Date.now.formatted(date: .complete, time: .omitted))
-                .font(.subheadline)
-                .foregroundStyle(.gray)
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Photo Cleaner")
+                    .font(.largeTitle.bold())
+                    .foregroundStyle(.white)
+                Text(Date.now.formatted(date: .complete, time: .omitted))
+                    .font(.subheadline)
+                    .foregroundStyle(.gray)
+            }
+            Spacer()
+            Button(action: { showTrash = true }) {
+                ZStack {
+                    Image(systemName: "trash")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(assetStore.trashedIDs.isEmpty ? .white.opacity(0.5) : .red)
+                    if !assetStore.trashedIDs.isEmpty {
+                        Text("\(min(assetStore.trashedIDs.count, 99))")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(3)
+                            .background(.red, in: Circle())
+                            .offset(x: 8, y: -8)
+                    }
+                }
+                .frame(width: 44, height: 44)
+                .background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
         }
         .padding(.horizontal)
         .padding(.top, 56)

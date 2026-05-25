@@ -1,17 +1,19 @@
 import SwiftUI
 
 struct ActionBarView: View {
+    let mode: AppMode
     let canUndo: Bool
     let onSkip: () -> Void
     let onKeep: () -> Void
+    let onReturn: () -> Void
     let onDelete: () -> Void
-    let onFavorite: () -> Void
     let onUndo: () -> Void
-    let onHelp: () -> Void
+
+    private var isKeptForLater: Bool { mode == .keptForLater }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Undo + Favorite strip
+            // Undo strip
             HStack {
                 Button(action: onUndo) {
                     Label("Undo", systemImage: "arrow.uturn.backward")
@@ -21,31 +23,14 @@ struct ActionBarView: View {
                 .disabled(!canUndo)
 
                 Spacer()
-
-                Button(action: onFavorite) {
-                    Label("Favorite", systemImage: "star")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.yellow)
-                }
             }
             .padding(.horizontal)
             .padding(.bottom, 8)
 
             Divider().background(.white.opacity(0.1))
 
-            // Main action row
+            // Main action row — three equal actions
             HStack(spacing: 0) {
-                ActionButton(
-                    label: "HELP",
-                    icon: "questionmark.circle",
-                    color: .gray,
-                    action: onHelp
-                )
-
-                Divider()
-                    .frame(height: 36)
-                    .background(.white.opacity(0.15))
-
                 ActionButton(
                     label: "SKIP",
                     icon: "forward",
@@ -57,12 +42,21 @@ struct ActionBarView: View {
                     .frame(height: 36)
                     .background(.white.opacity(0.15))
 
-                ActionButton(
-                    label: "KEEP",
-                    icon: "arrow.down.circle",
-                    color: .white,
-                    action: onKeep
-                )
+                if isKeptForLater {
+                    ActionButton(
+                        label: "RETURN",
+                        icon: "tray.and.arrow.up",
+                        color: .blue,
+                        action: onReturn
+                    )
+                } else {
+                    ActionButton(
+                        label: "KEEP",
+                        icon: "arrow.down.circle",
+                        color: .white,
+                        action: onKeep
+                    )
+                }
 
                 Divider()
                     .frame(height: 36)
@@ -70,7 +64,7 @@ struct ActionBarView: View {
 
                 ActionButton(
                     label: "DELETE",
-                    icon: "xmark",
+                    icon: "trash",
                     color: .red,
                     action: onDelete
                 )
@@ -105,15 +99,28 @@ private struct ActionButton: View {
     }
 }
 
-#Preview {
+#Preview("Unsorted") {
     ActionBarView(
+        mode: .unsorted,
         canUndo: true,
         onSkip: {},
         onKeep: {},
+        onReturn: {},
         onDelete: {},
-        onFavorite: {},
-        onUndo: {},
-        onHelp: {}
+        onUndo: {}
+    )
+    .background(.black)
+}
+
+#Preview("Kept for Later") {
+    ActionBarView(
+        mode: .keptForLater,
+        canUndo: true,
+        onSkip: {},
+        onKeep: {},
+        onReturn: {},
+        onDelete: {},
+        onUndo: {}
     )
     .background(.black)
 }

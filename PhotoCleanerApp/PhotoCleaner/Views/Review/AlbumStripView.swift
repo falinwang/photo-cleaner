@@ -3,17 +3,17 @@ import SwiftUI
 struct AlbumStripView: View {
     let albums: [MockAlbum]
     let onSelect: (MockAlbum) -> Void
-    let onSeeAll: () -> Void
+    let onDismiss: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
-            Button(action: onSeeAll) {
+            Button(action: onDismiss) {
                 HStack {
                     Image(systemName: "square.grid.2x2")
-                    Text("SORT TO ALBUM..")
+                    Text("SORT TO ALBUM")
                         .kerning(0.5)
                     Spacer()
-                    Image(systemName: "chevron.up")
+                    Image(systemName: "chevron.down")
                 }
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.7))
@@ -65,7 +65,7 @@ private struct AlbumChip: View {
     AlbumStripView(
         albums: MockAlbum.mockAlbums,
         onSelect: { _ in },
-        onSeeAll: {}
+        onDismiss: {}
     )
     .background(.black)
 }
