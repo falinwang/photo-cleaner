@@ -31,8 +31,9 @@ struct ReviewView: View {
                     mode: mode,
                     item: session.currentItem,
                     progressText: session.progressText,
+                    trashHighlighted: isDraggingToDelete,
                     onClose: { dismiss() },
-                    onTrash: { session.delete(store: assetStore) }
+                    onTrash: { animateAndCommit(.delete) }
                 )
 
                 if let item = session.currentItem {
@@ -79,52 +80,61 @@ struct ReviewView: View {
     // MARK: - Swipe direction
 
     private enum SwipeAction {
-        case skip, keep, delete, favorite
+        case skip       // swipe left
+        case delete     // swipe toward top-right (toward trash icon)
+        case keep       // swipe right (flat)
+        case favorite   // swipe down
 
         var label: String {
             switch self {
             case .skip:     return "SKIP"
-            case .keep:     return "KEEP"
             case .delete:   return "DELETE"
+            case .keep:     return "KEEP"
             case .favorite: return "FAVORITE"
             }
         }
         var icon: String {
             switch self {
             case .skip:     return "forward.fill"
+            case .delete:   return "trash.fill"
             case .keep:     return "arrow.down.circle.fill"
-            case .delete:   return "xmark.circle.fill"
             case .favorite: return "star.fill"
             }
         }
         var color: Color {
             switch self {
             case .skip:     return .gray
-            case .keep:     return .blue
             case .delete:   return .red
+            case .keep:     return .blue
             case .favorite: return .yellow
             }
         }
+        // Card flies toward the trash can (top-right corner) for delete,
+        // off-left for skip, off-right for keep, downward for favorite.
         var exitOffset: CGSize {
             switch self {
-            case .skip:     return CGSize(width: -700, height: -50)
-            case .keep:     return CGSize(width: 700,  height: -50)
-            case .delete:   return CGSize(width: 0,    height: -900)
+            case .skip:     return CGSize(width: -700, height: -30)
+            case .delete:   return CGSize(width: 500,  height: -800)
+            case .keep:     return CGSize(width: 700,  height: -30)
             case .favorite: return CGSize(width: 0,    height: 900)
             }
         }
     }
 
+    // Detect top-right diagonal as delete; plain left as skip.
     private var pendingAction: SwipeAction? {
         let x = dragOffset.width
         let y = dragOffset.height
-        if abs(x) >= abs(y) {
-            if x < -swipeThreshold { return .skip }
-            if x >  swipeThreshold { return .keep }
-        } else {
-            if y < -swipeThreshold { return .delete }
-            if y >  swipeThreshold { return .favorite }
-        }
+        let t = swipeThreshold
+
+        // Top-right diagonal → delete (x rightward AND y upward)
+        if x > t * 0.6 && y < -(t * 0.6) { return .delete }
+        // Left → skip
+        if x < -t && abs(x) > abs(y) * 0.8 { return .skip }
+        // Down → favorite
+        if y > t && abs(y) > abs(x) { return .favorite }
+        // Right (flat) → keep
+        if x > t && abs(x) > abs(y) * 1.5 { return .keep }
         return nil
     }
 
@@ -133,6 +143,9 @@ struct ReviewView: View {
         let y = abs(dragOffset.height)
         return min(max(x, y) / swipeThreshold, 1.0)
     }
+
+    // True while the card is being dragged toward the trash icon
+    var isDraggingToDelete: Bool { pendingAction == .delete }
 
     // MARK: - Gesture
 
