@@ -1,4 +1,5 @@
 import Foundation
+import Photos
 import Observation
 
 struct UndoRecord {
@@ -74,7 +75,12 @@ class ReviewSession {
     }
 
     func favorite() {
-        // PhotoKit write happens in M2
+        guard let item = currentItem, let asset = item.asset else { return }
+        PHPhotoLibrary.shared().performChanges {
+            PHAssetChangeRequest(for: asset).isFavorite = true
+        }
+        pushUndo(UndoRecord(item: item, removedAtIndex: currentIndex, actionLabel: "Favorite"))
+        moveToNext()
     }
 
     func updateCloudStatus(_ status: CloudStatus, for id: String) {
@@ -84,9 +90,21 @@ class ReviewSession {
 
     func undo(store: AssetStore) {
         guard let record = undoStack.popLast() else { return }
-        store.keptForLaterIDs.remove(record.item.id)
-        store.trashedIDs.remove(record.item.id)
-        store.sortedIDs.remove(record.item.id)
+        switch record.actionLabel {
+        case "Keep":   store.keptForLaterIDs.remove(record.item.id)
+        case "Return": store.keptForLaterIDs.insert(record.item.id)
+        case "Delete": store.trashedIDs.remove(record.item.id)
+        case "Sort":   store.sortedIDs.remove(record.item.id)
+        case "Favorite":
+            if let asset = record.item.asset {
+                PHPhotoLibrary.shared().performChanges {
+                    PHAssetChangeRequest(for: asset).isFavorite = false
+                }
+            }
+            currentIndex = record.removedAtIndex
+            return
+        default: break
+        }
         let insertAt = min(record.removedAtIndex, items.count)
         items.insert(record.item, at: insertAt)
         currentIndex = insertAt

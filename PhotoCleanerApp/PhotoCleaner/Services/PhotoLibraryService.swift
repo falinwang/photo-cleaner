@@ -64,7 +64,7 @@ class PhotoLibraryService {
         options.includeAllBurstAssets = false
 
         switch mode {
-        case .unsorted:
+        case .unsorted, .largestFirst:
             options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
         case .onThisDay:
             options.predicate = onThisDayPredicate()
@@ -79,10 +79,33 @@ class PhotoLibraryService {
         var items: [MediaItem] = []
         result.enumerateObjects { asset, _, _ in
             guard store.isUnsorted(asset.localIdentifier) else { return }
-            items.append(self.makeItem(from: asset))
+            if mode == .largestFirst {
+                let size = Self.fileSize(from: asset)
+                items.append(MediaItem(
+                    id: asset.localIdentifier,
+                    asset: asset,
+                    mediaType: Self.mediaType(from: asset),
+                    cloudStatus: .local,
+                    fileSize: size,
+                    fileSizeIsEstimated: size == nil,
+                    creationDate: asset.creationDate
+                ))
+            } else {
+                items.append(self.makeItem(from: asset))
+            }
         }
 
-        if mode == .random { items.shuffle() }
+        switch mode {
+        case .random: items.shuffle()
+        case .largestFirst:
+            items.sort { a, b in
+                if a.mediaType != b.mediaType {
+                    return a.mediaType == .video
+                }
+                return (a.fileSize ?? 0) > (b.fileSize ?? 0)
+            }
+        default: break
+        }
         return items
     }
 

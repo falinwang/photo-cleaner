@@ -1,118 +1,243 @@
-# Project: iOS Photo Cleaner
+# CLAUDE.md — iOS Photo Cleaner
 
-You are building an iOS native app in Swift/SwiftUI using PhotoKit.
-The canonical product spec is `photo-organizer-prd-v1.md` at the repo root — read it when scope questions arise.
+**Single authority for all implementation work.** When this file contradicts any other document (AGENT.md, memory files, old session transcripts), this file wins. The only exception is the canonical product spec below.
 
-## Product goal
-A local-first, manual photo organizer that wraps the system Photos app with a focused review-and-organize workflow. Users review videos and screenshots, recover storage via Largest First, inspect source/version history, and manage items through explicit keep/delete/favorite actions. No cloud backend, no AI, no auto-delete, no social features.
+---
 
-## Scope by priority
+## Precedence rules
 
-### P0 — Must ship
-- **Unsorted Videos** — filter to `PHAssetMediaType.video`, playable inline in review.
-- **Unsorted Screenshots** — filter to screenshot media subtype.
-- **Largest First** — videos first, sorted by file size descending. Show file size on cards.
-- **Review actions** — Delete, Keep, Favorite, Undo. All via explicit buttons.
-- **Left/right swipe** — navigate previous/next item only. Do NOT use swipes for keep/delete.
-- **Video playback** — inline AVPlayer in review. Loading state while preparing. Never static thumbnail for videos.
-- **Kept for Later** — temporary local bucket. One-tap "Return to Unsorted" action.
-- **Source / Version panel** — swipe-up or toggle to reveal (not a separate screen). Shows version stage picker, notes field, and read-only metadata (date, type, size, source, resolution). Supports manual tagging. Missing data shows "Unknown."
+1. **`photo-organizer-prd-v1.md`** — canonical product spec. Wins on **WHAT** to build (features, modes, scope).
+2. **This file** (`CLAUDE.md`) — canonical implementation spec. Wins on **HOW** to build, current implementation state, code patterns, and technical rules.
+3. **`AGENT.md`** — handoff summary. Read for architecture overview, but defer to this file on any conflict.
+4. **Memory files** (`~/.claude/.../memory/`) — historical record of past sessions. Describe what happened and why. Not authority on current state.
+5. **The code itself** — ground truth on what actually exists. If this file says something is done but the code says otherwise, the code is right; update this file.
 
-### P1 — Important, follow after P0
-- Auto-detect "Saved from" metadata when available from PhotoKit.
-- Manual source/version tagging UI polish.
-- Video progress bar with scrubbing isolated from card navigation gestures.
-- Bottom-sheet or pull-up panel presentation for source/version.
+When you find a contradiction between any two sources, resolve in the order above and flag it.
 
-### P2 — Later
-- Capacity stats dashboard.
-- Version history linking across assets.
-- Pre-fetching and lazy-loading performance optimization.
-- Batch operations.
+---
 
-### Explicitly excluded from current scope
-- **Sort to album** — removed to keep stability. Do not build or extend album-sorting features.
-- **On This Day** — complete and frozen. Do not touch unless blocked by a bug.
-- **Random mode** — not in current scope.
-- AI photo cleanup, cloud backup, login/accounts, social sharing, face recognition, content classification, cross-device sync, Lightroom integration.
+## What this project is
 
-## Core modes (P0)
+A local-only, manual iOS photo organizer. Swift + SwiftUI + PhotoKit + AVFoundation. No backend, no AI, no cloud sync. The user reviews photos/videos one at a time and decides their fate.
 
-### Unsorted Videos
-- Filter unsorted media to `PHAssetMediaType.video` only.
-- Sort by creation date descending (newest first).
-- Entry point for tackling large video files first.
+---
 
-### Unsorted Screenshots
-- Filter unsorted media to `PHAssetMediaSubtype.photoScreenshot` only.
-- Sort by creation date descending.
-- Quick cleanup for screenshot buildup.
+## Active Xcode project
 
-### Largest First
-- Videos first, then photos, sorted by file size descending.
-- Use `PHAssetResource` for file size (may be estimated for iCloud assets — label accordingly).
-- Capacity-focused entry point.
+```
+PhotoCleanerApp/PhotoCleanerApp.xcodeproj
+```
 
-### Kept for Later
-- "Keep" action moves items into this temporary local bucket (stored in `AssetStore.keptForLaterIDs`).
-- User can review kept items and one-tap return them to Unsorted.
-- Not a final destination — a staging area.
+All source under:
+```
+PhotoCleanerApp/PhotoCleanerApp/PhotoCleaner/
+```
 
-## Review actions
-- **Delete** — moves to in-app trash (`AssetStore.trashedIDs`). User must confirm permanent deletion in TrashView.
-- **Keep** — moves to Kept for Later bucket (`AssetStore.keptForLaterIDs`).
-- **Favorite** — marks the PHAsset as favorite via PhotoKit write.
-- **Undo** — restores the previous action (single-level, up to 20 in stack).
-- All actions use explicit buttons in the action bar. Do NOT use swipe gestures for keep/delete.
+---
 
-## Gestures
-- **Left/right swipe** — navigate to previous/next item (like system Photos app).
-- **Swipe up** — open the source/version detail panel.
-- Gestures must not conflict with video playback controls or scrubbing.
+## Product modes (from PRD v1 — all P0)
 
-## Source / Version panel
-- Swipe-up or toggle to reveal an overlay/panel (not a separate navigation screen).
-- Editable: version stage picker (`VersionStage` enum), free-text notes field.
-- Read-only metadata: date, media type, file size, PHAsset source type, pixel resolution, subtype tags.
-- Persisted per-asset via `UserDefaults` keyed by `localIdentifier`.
-- Missing data shows "Unknown" or "Not tagged."
+| Mode | Status | Description |
+|---|---|---|
+| On This Day | Done | Photos from this date in past years, grouped by year. Frozen — only fix bugs. |
+| Random | Done | Random picks from Unsorted. |
+| Largest First | Done | Videos first, sorted by file size descending. Eager file-size loading for sort. |
+| Unsorted | Done | Main todo list — everything not yet organized. |
+| Kept for Later | Done | Temporary staging bucket. One-tap return to Unsorted. |
 
-## Video playback
-- Videos play inline in the review card via AVPlayer / AVPlayerViewController.
-- Request `PHImageManager.requestPlayerItem(forVideo:options:resultHandler:)`.
-- Show loading indicator while player item prepares.
-- Show clear fallback (error icon + "Unable to play") on failure.
-- Never display a video asset as a static thumbnail in review mode.
+`AppMode` enum in `AppState.swift` currently has 4 values — missing `largestFirst`. PRD requires all 5.
 
-## File size convention
-- File sizes stored as `Int64` bytes.
-- `formattedFileSize` formats to KB or MB (threshold 1,000,000 bytes).
-- Estimated sizes (from iCloud assets) prefixed with `~`.
+**Divergence from PRD:** PRD specifies Unsorted Videos and Unsorted Screenshots as separate modes. Current implementation has a single Unsorted mode (all media types). This is an acceptable simplification for now — the media-type filter can be added to the Unsorted mode as a segmented control rather than splitting into separate modes.
 
-## UI rules
-- Show media type early and clearly: photo, video, screenshot, or other.
-- Show local/iCloud status clearly if available.
-- Show file size when available. Label estimated sizes.
-- Favor explicit buttons over hidden actions.
-- Favor clarity over clever gestures.
-- Favor stable navigation over fancy interactions.
-- Keep the UI simple and native. Prefer Apple HIG.
+---
+
+## Review actions (from PRD v1)
+
+| Action | Implementation | Status |
+|---|---|---|
+| Delete → app trash | Button in ActionBar. `session.delete()` → `AssetStore.trashedIDs` | Done |
+| Keep → Kept for Later | Button in ActionBar. `session.keep()` → `AssetStore.keptForLaterIDs` | Done |
+| Return to Unsorted | In keptForLater mode, KEEP becomes RETURN. `session.returnToUnsorted()` | Done |
+| Skip | Button in ActionBar. `session.skip()` cycles item to end of queue | Done |
+| Favorite | Swipe-down gesture on card. PhotoKit `isFavorite = true`. Undo un-favorites. | Done |
+| Sort to Album | AlbumStripView exists with mock data. `sortToAlbum()` wired. | UI done, data mock |
+| Undo | Stack-based, capped at 20. `session.undo()` | Done |
+
+**Divergence from PRD:** PRD specifies swipe gestures for skip (left), delete (right-up), and favorite (down). Current implementation uses **buttons only** for actions and reserves swipes for left/right navigation. This was an intentional UX decision — buttons are more discoverable and avoid gesture conflicts with video controls. Do not revert to gesture-based actions without explicit discussion.
+
+**Known undo bug:** `ReviewSession.undo()` at line 85-93 unconditionally calls `store.keptForLaterIDs.remove()`, but when undoing a `returnToUnsorted` action the item was already removed — it should re-add it. `UndoRecord.actionLabel` is stored but never read. Fix: branch on `record.actionLabel` in `undo()`.
+
+---
+
+## Architecture — 22 Swift files
+
+### Models (5)
+- `Models/MediaItem.swift` — `MediaItem`, `MediaType`, `CloudStatus`, mock data
+- `Models/SourceInfo.swift` — `VersionStage` enum, `SourceInfo` (UserDefaults-backed per-item metadata)
+- `Models/YearGroup.swift` — year grouping for On This Day
+- `Models/TaskState.swift` — async task state
+- `Models/MockData.swift` — mock items and albums for previews
+
+### Services (3)
+- `Services/PhotoLibraryService.swift` — PHAsset fetch for all modes. `fetchOnThisDayGrouped()`, `fileSize(from:)` (lazy), `makeItem()`
+- `Services/ReviewSession.swift` — item queue, currentIndex, undo stack (max 20), skip/keep/delete/returnToUnsorted/sortToAlbum/undo, navigation
+- `Services/AssetStore.swift` — `@Observable`, persisted Sets: `keptForLaterIDs`, `trashedIDs`, `sortedIDs`. `isUnsorted(id)` = not in any set
+
+### Views — Review flow (7)
+- `Views/Review/ReviewView.swift` — main review: TopBar → MediaCard → SourcePanel (toggle) → toggleRow → ActionBar → AlbumStrip (toggle). Horizontal-only swipe nav (80pt threshold). Dynamic card height via GeometryReader.
+- `Views/Review/MediaCardView.swift` — photo (UIImage) or video (AVPlayerLayer via UIViewRepresentable). Custom video controls with auto-hide. Full-screen via `.fullScreenCover`.
+- `Views/Review/OnThisDayView.swift` — 3-column year-grouped thumbnail grid → NavigationLink → ReviewView
+- `Views/Review/SourcePanelView.swift` — collapsible panel: version stage picker, notes, read-only metadata. Auto-saves onDisappear.
+- `Views/Review/TopBarView.swift` — close/help/trash + mode label + progress + compact date row
+- `Views/Review/ActionBarView.swift` — SKIP / KEEP(RETURN) / DELETE + undo. Mode-aware button swap for keptForLater.
+- `Views/Review/AlbumStripView.swift` — album grid for sort-to-album. Currently uses `MockAlbum` data.
+
+### Views — Shared (3)
+- `Views/Shared/MediaTypeBadge.swift`
+- `Views/Shared/CloudStatusBadge.swift`
+- `Views/Shared/PermissionView.swift`
+
+### Views — Other (2)
+- `Views/Home/HomeView.swift` — mode selection grid, branches to OnThisDayView or ReviewView
+- `Views/Trash/TrashView.swift` — trashed items grid, batch recover/delete
+
+### Root (2)
+- `PhotoCleanerApp.swift` — `@main`
+- `AppState.swift` — `AppMode` enum + `AppState` observable
+
+---
+
+## Key design decisions
+
+- **Buttons-first for actions.** All review actions use explicit buttons. Swipes are for left/right navigation only.
+- **In-app trash first.** Delete → `trashedIDs` set → user confirms permanent deletion in TrashView.
+- **AssetStore is source of truth** for unsorted/kept/trashed/sorted state, not PhotoKit albums.
+- **Video rendering.** AVPlayerLayer via UIViewRepresentable for inline card (avoids gesture conflicts). Native VideoPlayer only for full-screen.
+- **File size.** Lazy-loaded on background thread via `PhotoLibraryService.fileSize(from:)`. Not computed synchronously in `makeItem()` (was causing main-thread watchdog kills).
+- **Undo.** Stack-based, capped at 20, restores item to original index. FIFO eviction when full.
+- **File size format.** `Int64` bytes, `formattedFileSize` to KB/MB, threshold 1,000,000 bytes. Estimated sizes (iCloud) prefixed with `~`.
+- **No extra dependencies.** No animation libraries, no third-party frameworks.
+
+---
+
+## UI rules (enforced — do not violate)
+
+### HStack overflow defense (mandatory for every bar/row)
+1. Every `Text` gets `.lineLimit(1)` + `.truncationMode(.tail)` unless wrapping is intended
+2. Every `Spacer()` uses `Spacer(minLength: X)` — 0 to allow collapse, 8+ for guaranteed gap
+3. Custom-styled buttons get `.buttonStyle(.plain)`
+4. Dates/sizes/numbers in tight bars use compact formatters (e.g. `"MMM d, yyyy"` not `.medium`)
+5. Pin icon/button sizes with `.frame(width:height:)`
+6. Test Previews with longest realistic content, not just `MockData[0]`
+7. User/library data in bars (album names, metadata) = untrusted length, always truncate
+
+### Chrome distillation
+- Max 3 action buttons in the main action row, one visually primary (filled capsule)
+- Meta-actions (help, settings) go to top bar
+- Secondary actions (sort to album, source panel) collapse behind toggles
+- Before adding any UI element, ask: does this earn its place against the photo card?
+
+### Mode-aware button swap
+- When a mode inverts the meaning of a primary action, swap label + icon + color
+- `mode == .keptForLater` → KEEP becomes RETURN (tray icon, blue), calls `returnToUnsorted()`
+
+### Gesture rules
+- Swipe axes must be simple 1D (horizontal only for nav, vertical only for panels)
+- Never use diagonal gestures
+- Video scrub gesture must be isolated from card navigation
+
+---
 
 ## Technical rules
-- Swift + SwiftUI + PhotoKit.
-- Local-first only. No backend. No AI.
-- No extra dependencies unless necessary.
-- Prefer minimal safe changes over large rewrites.
-- Reuse existing views if possible.
-- Keep code modular and easy to extend.
 
-## Workflow
-- Before coding, explain your plan briefly.
-- Identify which files/components will need changes.
-- Make the smallest reliable change first.
-- Batch related edits together.
-- Work autonomously and continue until the task is complete.
-- Only stop to ask if something is truly blocking.
-- After each milestone, summarize: what changed, how to test it, known limitations, useful follow-ups.
-- Do not expand scope without asking.
-- If an instruction conflicts with a better product decision, explain why before changing direction.
+- Swift + SwiftUI + PhotoKit + AVFoundation. No backend, no AI.
+- `@Observable` for state, `@Environment` for DI
+- Persistence via `UserDefaults` + `Codable`
+- Prefer minimal safe changes over rewrites
+- Reuse existing views when possible
+- Verify with actual Xcode build, not SourceKit diagnostics (SourceKit produces frequent false positives)
+- Keep code modular and easy to extend
+
+### Propagation rule (mandatory)
+
+When you change behavior in a UI-layer file, you MUST check every Service and Model file that backs it. A UI change is never complete until its reversal path (undo), state transition, and persistence are verified.
+
+**Checklist — after any UI behavior change, verify:**
+1. Can the action be undone? If yes, does `ReviewSession.undo()` correctly invert it?
+2. Does the action mutate `AssetStore`? If yes, is the set operation reversible?
+3. If the action changes meaning per-mode (like KEEP→RETURN), does the undo branch on `actionLabel` to invert the correct direction?
+
+**UI → Service dependency map:**
+
+| UI file | Must also check |
+|---|---|
+| `ActionBarView.swift` | `ReviewSession.swift` — `keep()`, `returnToUnsorted()`, `delete()`, `undo()`, `UndoRecord.actionLabel`; `AssetStore.swift` — all three ID sets |
+| `ReviewView.swift` (swipe handlers) | `ReviewSession.swift` — `moveToNext()`, `moveToPrevious()`, `favorite()`, `undo()`, navigation guards |
+| `SourcePanelView.swift` | `SourceInfo.swift` — `VersionStage`, `UserDefaults` persistence; `ReviewSession.swift` — `updateCloudStatus()` |
+| `TopBarView.swift` (trash button) | `ReviewSession.swift` — `delete()` + `undo()`; `AssetStore.swift` — `trashedIDs` |
+| `AlbumStripView.swift` | `ReviewSession.swift` — `sortToAlbum()` + `undo()`; `AssetStore.swift` — `sortedIDs` |
+| `HomeView.swift` (mode cards) | `AppState.swift` — `AppMode` enum; `PhotoLibraryService.swift` — `fetchItems(for:store:)` |
+| `TrashView.swift` | `AssetStore.swift` — `trashedIDs`; `PHAssetChangeRequest.deleteAssets` |
+
+**Example of a propagation failure (do not repeat):** The KEEP→RETURN swap was implemented in `ActionBarView.swift` (UI) but `ReviewSession.undo()` continued to blindly `remove` from `keptForLaterIDs` instead of branching on `actionLabel`. Undoing a RETURN corrupted state: the item disappeared from both Kept and Unsorted. The fix was one `switch` statement. The root cause was no propagation check.
+
+### Verification gate (mandatory)
+
+A memory must NOT be marked `verified.status: true` until both conditions below pass. This applies to all `type: feedback` memories. No exceptions.
+
+**Gate 1 — Build:**
+```
+xcodebuild -project PhotoCleanerApp/PhotoCleanerApp.xcodeproj \
+  -scheme PhotoCleanerApp \
+  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  build
+```
+- Exit code must be `0`. Warnings are acceptable. Errors are not.
+- Record the date and result in the memory's `verified.build` field.
+
+**Gate 2 — Regression test:**
+- Run the scenario described in the memory's `## Regression test` section.
+- All assertions must pass. If the test relies on UI inspection (screenshot, view debugger), attach or describe the evidence.
+- Record the date and result in the memory's `verified.regression_test` field.
+
+**Verified metadata format:**
+
+```yaml
+verified:
+  status: true          # true only if both gates passed, false otherwise
+  date: 2026-05-26
+  build:
+    passed: true
+    date: 2026-05-26
+  regression_test:
+    passed: true
+    date: 2026-05-26
+    notes: "all assertions passed on iPhone 16 Simulator"
+```
+
+**Ordering:** always run the build gate first. If the project doesn't compile, the regression test is meaningless.
+
+---
+
+## Known sharp edges
+
+- New Swift files must be added to Xcode project manually (on disk ≠ in pbxproj)
+- SourceKit frequently false-positives on cross-file types and UIViewRepresentable — trust the build, not the inline diagnostics
+- Hardcoded layout constants (`topBarHeight: 72`, `actionBarHeight: 110` in ReviewView) will drift from reality if Dynamic Type or content changes the actual bar heights
+
+---
+
+## Pending work (priority order)
+
+### P0
+*(none — all P0 items complete)*
+
+### P1
+4. Wire AlbumStripView to real PhotoKit album data instead of `MockAlbum`
+5. Add media-type filter (videos / screenshots / all) to Unsorted mode
+6. Ensure video scrub gesture is isolated from card swipe
+
+### P2
+7. Capacity stats dashboard
+8. Pre-fetching and lazy-loading optimization
+9. Batch operations

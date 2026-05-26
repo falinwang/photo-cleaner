@@ -11,7 +11,10 @@ struct ReviewView: View {
 
     // MARK: - Navigation swipe
     @State private var navDragOffset: CGFloat = 0
+    @State private var favoriteDragOffset: CGFloat = 0
+    @State private var showFavoriteOverlay = false
     private let navThreshold: CGFloat = 80
+    private let favoriteThreshold: CGFloat = 120
 
     var body: some View {
         contentView
@@ -48,7 +51,17 @@ struct ReviewView: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
                         .frame(width: geo.size.width, height: cardH)
-                        .offset(x: navDragOffset)
+                        .offset(x: navDragOffset, y: favoriteDragOffset)
+                        .overlay {
+                            if favoriteDragOffset > 0 || showFavoriteOverlay {
+                                Image(systemName: "heart.fill")
+                                    .font(.system(size: 72))
+                                    .foregroundStyle(.red)
+                                    .scaleEffect(showFavoriteOverlay ? 1.1 : min(1.0, favoriteDragOffset / favoriteThreshold))
+                                    .opacity(showFavoriteOverlay ? 0.8 : favoriteDragOffset / favoriteThreshold)
+                                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: showFavoriteOverlay)
+                            }
+                        }
                         .gesture(navGesture)
                         .id(item.id)
                     }
@@ -122,7 +135,7 @@ struct ReviewView: View {
         .padding(.vertical, 10)
     }
 
-    // MARK: - Navigation gesture (horizontal swipe only)
+    // MARK: - Gesture (horizontal nav + vertical-down favorite)
 
     private var navGesture: some Gesture {
         DragGesture()
@@ -130,31 +143,44 @@ struct ReviewView: View {
                 let isHorizontal = abs(value.translation.width) > abs(value.translation.height)
                 if isHorizontal {
                     navDragOffset = value.translation.width
+                    favoriteDragOffset = 0
+                } else {
+                    navDragOffset = 0
+                    favoriteDragOffset = max(0, value.translation.height)
                 }
             }
             .onEnded { value in
                 let isHorizontal = abs(value.translation.width) > abs(value.translation.height)
-                guard isHorizontal else {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { navDragOffset = 0 }
-                    return
-                }
-
-                if value.translation.width < -navThreshold {
-                    let w = UIScreen.main.bounds.width
-                    withAnimation(.easeOut(duration: 0.2)) { navDragOffset = -w }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-                        navDragOffset = 0
-                        session.moveToNext()
+                if isHorizontal {
+                    if value.translation.width < -navThreshold {
+                        let w = UIScreen.main.bounds.width
+                        withAnimation(.easeOut(duration: 0.2)) { navDragOffset = -w }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                            navDragOffset = 0
+                            session.moveToNext()
+                        }
+                    } else if value.translation.width > navThreshold {
+                        let w = UIScreen.main.bounds.width
+                        withAnimation(.easeOut(duration: 0.2)) { navDragOffset = w }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                            navDragOffset = 0
+                            session.moveToPrevious()
+                        }
+                    } else {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { navDragOffset = 0 }
                     }
-                } else if value.translation.width > navThreshold {
-                    let w = UIScreen.main.bounds.width
-                    withAnimation(.easeOut(duration: 0.2)) { navDragOffset = w }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-                        navDragOffset = 0
-                        session.moveToPrevious()
+                } else if value.translation.height > favoriteThreshold {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { favoriteDragOffset = 0 }
+                    showFavoriteOverlay = true
+                    session.favorite()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                        showFavoriteOverlay = false
                     }
                 } else {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { navDragOffset = 0 }
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        navDragOffset = 0
+                        favoriteDragOffset = 0
+                    }
                 }
             }
     }
@@ -220,6 +246,7 @@ struct EmptyStateView: View {
         case .random:       return "shuffle"
         case .unsorted:     return "checkmark.circle"
         case .keptForLater: return "bookmark.slash"
+        case .largestFirst: return "arrow.up.arrow.down"
         }
     }
 
@@ -229,6 +256,7 @@ struct EmptyStateView: View {
         case .random:       return "Nothing left to review"
         case .unsorted:     return "All caught up!"
         case .keptForLater: return "Nothing kept for later"
+        case .largestFirst: return "All clear!"
         }
     }
 
@@ -241,6 +269,7 @@ struct EmptyStateView: View {
         case .random:       return "All photos in your library have been organized."
         case .unsorted:     return "Every photo has been sorted, kept, or deleted."
         case .keptForLater: return "Tap KEEP on any photo to save it here. Tap RETURN to send it back to Unsorted."
+        case .largestFirst: return "No large files left to recover."
         }
     }
 }

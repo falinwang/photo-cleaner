@@ -5,6 +5,7 @@ enum AppMode: String, CaseIterable, Identifiable, Hashable {
     case random = "Random"
     case unsorted = "Unsorted"
     case keptForLater = "Kept for Later"
+    case largestFirst = "Largest First"
 
     var id: String { rawValue }
 
@@ -14,6 +15,7 @@ enum AppMode: String, CaseIterable, Identifiable, Hashable {
         case .random:       return "shuffle"
         case .unsorted:     return "tray"
         case .keptForLater: return "bookmark"
+        case .largestFirst: return "arrow.up.arrow.down"
         }
     }
 
@@ -23,6 +25,7 @@ enum AppMode: String, CaseIterable, Identifiable, Hashable {
         case .random:       return "Random picks from Unsorted"
         case .unsorted:     return "Everything not yet organized"
         case .keptForLater: return "Temporary bucket — review and return to Unsorted"
+        case .largestFirst: return "Videos first, sorted by file size — recover the most space"
         }
     }
 }
