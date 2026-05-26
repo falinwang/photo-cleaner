@@ -2,7 +2,6 @@ import SwiftUI
 import Photos
 import AVFoundation
 import AVKit
-import Combine
 import UIKit
 
 struct MediaCardView: View {
@@ -13,6 +12,7 @@ struct MediaCardView: View {
     @State private var imageRequestID: PHImageRequestID? = nil
     @State private var player: AVPlayer? = nil
     @State private var videoRequestID: PHImageRequestID? = nil
+    @State private var timeObserver: Any? = nil
     @State private var isPlaying = false
     @State private var lazyFileSize: String? = nil
 
@@ -40,7 +40,6 @@ struct MediaCardView: View {
                 showControls = true
             }
         }
-        .onReceive(timer) { _ in updateTime() }
     }
 
     // MARK: - Media layer
@@ -166,17 +165,20 @@ struct MediaCardView: View {
 
     // MARK: - Time tracking
 
-    private var timer: Publishers.Autoconnect<Timer.TimerPublisher> {
-        Timer.publish(every: 0.25, on: .main, in: .common).autoconnect()
-    }
-
-    private func updateTime() {
-        guard let player, !isSeeking else { return }
-        let t = CMTimeGetSeconds(player.currentTime())
-        if t.isFinite { currentTime = t }
-        if duration == 0, let item = player.currentItem {
-            let d = CMTimeGetSeconds(item.duration)
-            if d.isFinite { duration = d }
+    /// Periodic observer owned by the player: fires only for videos and only while playback
+    /// advances — no ticks on photo cards or while paused. Removed in `cancelRequest`.
+    private func addTimeObserver(to player: AVPlayer) {
+        timeObserver = player.addPeriodicTimeObserver(
+            forInterval: CMTime(seconds: 0.25, preferredTimescale: 600),
+            queue: .main
+        ) { time in
+            guard !self.isSeeking else { return }
+            let t = CMTimeGetSeconds(time)
+            if t.isFinite { self.currentTime = t }
+            if self.duration == 0, let item = player.currentItem {
+                let d = CMTimeGetSeconds(item.duration)
+                if d.isFinite { self.duration = d }
+            }
         }
     }
 
@@ -248,7 +250,9 @@ struct MediaCardView: View {
         ) { playerItem, info in
             guard let playerItem else { return }
             DispatchQueue.main.async {
-                self.player = AVPlayer(playerItem: playerItem)
+                let player = AVPlayer(playerItem: playerItem)
+                self.player = player
+                self.addTimeObserver(to: player)
                 let isInCloud = info?[PHImageResultIsInCloudKey] as? Bool ?? false
                 onCloudStatusUpdate?(isInCloud ? .iCloudOnly : .local)
             }
@@ -322,6 +326,10 @@ struct MediaCardView: View {
             PHImageManager.default().cancelImageRequest(id)
             videoRequestID = nil
         }
+        if let timeObserver, let player {
+            player.removeTimeObserver(timeObserver)
+        }
+        timeObserver = nil
         player?.pause()
         player = nil
         isPlaying = false

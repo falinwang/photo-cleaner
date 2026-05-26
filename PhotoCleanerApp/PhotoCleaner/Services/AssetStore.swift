@@ -3,15 +3,23 @@ import Observation
 
 @Observable
 class AssetStore {
-    var keptForLaterIDs: Set<String> { didSet { persist() } }
-    var trashedIDs: Set<String>      { didSet { persist() } }
-    var sortedIDs: Set<String>       { didSet { persist() } }
+    private enum Key {
+        static let kept    = "keptForLaterIDs"
+        static let trashed = "trashedIDs"
+        static let sorted  = "sortedIDs"
+    }
+
+    // Each set persists only itself on change — a mutation no longer re-serializes all three.
+    var keptForLaterIDs: Set<String> { didSet { persist(keptForLaterIDs, forKey: Key.kept) } }
+    var trashedIDs: Set<String>      { didSet { persist(trashedIDs, forKey: Key.trashed) } }
+    var sortedIDs: Set<String>       { didSet { persist(sortedIDs, forKey: Key.sorted) } }
 
     init() {
+        // Assignments in init don't fire didSet, so this reads without writing back.
         let d = UserDefaults.standard
-        keptForLaterIDs = Set(d.stringArray(forKey: "keptForLaterIDs") ?? [])
-        trashedIDs      = Set(d.stringArray(forKey: "trashedIDs")      ?? [])
-        sortedIDs       = Set(d.stringArray(forKey: "sortedIDs")       ?? [])
+        keptForLaterIDs = Set(d.stringArray(forKey: Key.kept)    ?? [])
+        trashedIDs      = Set(d.stringArray(forKey: Key.trashed) ?? [])
+        sortedIDs       = Set(d.stringArray(forKey: Key.sorted)  ?? [])
     }
 
     func isUnsorted(_ id: String) -> Bool {
@@ -26,10 +34,7 @@ class AssetStore {
         sortedIDs = []
     }
 
-    private func persist() {
-        let d = UserDefaults.standard
-        d.set(Array(keptForLaterIDs), forKey: "keptForLaterIDs")
-        d.set(Array(trashedIDs),      forKey: "trashedIDs")
-        d.set(Array(sortedIDs),       forKey: "sortedIDs")
+    private func persist(_ ids: Set<String>, forKey key: String) {
+        UserDefaults.standard.set(Array(ids), forKey: key)
     }
 }
