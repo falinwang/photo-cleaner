@@ -26,10 +26,7 @@ struct MediaCardView: View {
     private var isVideo: Bool { item.mediaType == .video }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            mediaLayer
-            badgeRow
-        }
+        mediaLayer
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .onAppear  { loadMedia() }
         .onDisappear { cancelRequest() }
@@ -48,8 +45,11 @@ struct MediaCardView: View {
     private var mediaLayer: some View {
         if isVideo {
             if let player {
-                ZStack {
+                ZStack(alignment: .bottom) {
                     PlayerView(player: player)
+
+                    // Badge row behind interactive elements
+                    badgeRow
 
                     // Tap anywhere to toggle controls
                     Color.clear
@@ -78,15 +78,24 @@ struct MediaCardView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                placeholder
+                ZStack(alignment: .bottom) {
+                    placeholder
+                    badgeRow
+                }
             }
         } else if let image {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ZStack(alignment: .bottom) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                badgeRow
+            }
         } else {
-            placeholder
+            ZStack(alignment: .bottom) {
+                placeholder
+                badgeRow
+            }
         }
     }
 

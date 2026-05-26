@@ -219,11 +219,18 @@ verified:
 
 ---
 
+## Bugs
+
+| ID | Status | Description | File |
+|---|---|---|---|
+| BUG-001 | Fixed (2026-05-26) | Play button hidden behind video badge row. Root cause: outer `ZStack(alignment: .bottom)` rendered `badgeRow` on top of `mediaLayer`. When card height was constrained (source panel open, short video), the centered Play button overlapped the bottom-aligned badge row, and the badge won on z-order. Fix: moved `badgeRow` inside each branch of `mediaLayer` — behind the Play button/tap-area/controls in the video ZStack, and overlaid at `.bottom` for photos. | `MediaCardView.swift:29-32` |
+
 ## Known sharp edges
 
 - New Swift files must be added to Xcode project manually (on disk ≠ in pbxproj)
 - SourceKit frequently false-positives on cross-file types and UIViewRepresentable — trust the build, not the inline diagnostics
 - Hardcoded layout constants (`topBarHeight: 72`, `actionBarHeight: 110` in ReviewView) will drift from reality if Dynamic Type or content changes the actual bar heights
+- BUG-001 fix: `badgeRow` now lives in each branch of `mediaLayer` rather than the outer ZStack. When adding new media types or modifying the card layout, keep interactive elements (Play button, gestures) in front of `badgeRow` in z-order.
 
 ---
 
