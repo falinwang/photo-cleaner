@@ -24,7 +24,8 @@ struct OnThisDayView: View {
         .navigationDestination(item: $selectedGroup) { group in
             ReviewView(
                 mode: .onThisDay,
-                session: ReviewSession(items: group.items, startID: startItemID)
+                preloadedItems: group.items,
+                startID: startItemID
             )
         }
     }
@@ -95,47 +96,45 @@ struct OnThisDayView: View {
     }
 
     private func thumbnailCell(for item: MediaItem, in group: YearGroup) -> some View {
-        GeometryReader { geo in
-            Button {
-                startItemID = item.id
-                selectedGroup = group
-            } label: {
-                ZStack {
-                    if let thumb = thumbnails[item.id] {
-                        Image(uiImage: thumb)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: geo.size.width, height: geo.size.width)
-                            .clipped()
-                    } else {
-                        Color(white: 0.15)
-                        ProgressView().tint(.white.opacity(0.4)).scaleEffect(0.7)
-                    }
+        Button {
+            startItemID = item.id
+            selectedGroup = group
+        } label: {
+            ZStack {
+                Color(white: 0.15)
+                if let thumb = thumbnails[item.id] {
+                    Image(uiImage: thumb)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    ProgressView().tint(.white.opacity(0.4)).scaleEffect(0.7)
+                }
 
-                    VStack {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Image(systemName: item.mediaType.icon)
+                            .font(.caption2)
+                            .foregroundStyle(.white)
+                            .padding(3)
+                            .background(.black.opacity(0.5), in: Circle())
                         Spacer()
-                        HStack {
-                            Image(systemName: item.mediaType.icon)
+                        if item.mediaType == .video {
+                            Image(systemName: "play.fill")
                                 .font(.caption2)
                                 .foregroundStyle(.white)
                                 .padding(3)
                                 .background(.black.opacity(0.5), in: Circle())
-                            Spacer()
-                            if item.mediaType == .video {
-                                Image(systemName: "play.fill")
-                                    .font(.caption2)
-                                    .foregroundStyle(.white)
-                                    .padding(3)
-                                    .background(.black.opacity(0.5), in: Circle())
-                            }
                         }
-                        .padding(4)
                     }
+                    .padding(4)
                 }
             }
-            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+            .aspectRatio(1, contentMode: .fit)
+            .clipped()
         }
-        .aspectRatio(1, contentMode: .fit)
+        .buttonStyle(.plain)
     }
 
     // MARK: - Empty state

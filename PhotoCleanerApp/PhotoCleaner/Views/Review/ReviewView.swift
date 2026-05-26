@@ -2,7 +2,12 @@ import SwiftUI
 
 struct ReviewView: View {
     let mode: AppMode
-    @State var session: ReviewSession
+    /// Items already in memory (On This Day passes its year group); `nil` means fetch from the library.
+    private let preloadedItems: [MediaItem]?
+    private let startID: String?
+
+    @State private var session = ReviewSession(items: [])
+    @State private var isLoading = true
     @Environment(AssetStore.self) private var assetStore
     @Environment(PhotoLibraryService.self) private var library
     @Environment(\.dismiss) private var dismiss
@@ -10,6 +15,12 @@ struct ReviewView: View {
     @State private var showAlbumStrip = false
     @State private var showSourcePanel = false
     @State private var mediaFilter: MediaFilter = .all
+
+    init(mode: AppMode, preloadedItems: [MediaItem]? = nil, startID: String? = nil) {
+        self.mode = mode
+        self.preloadedItems = preloadedItems
+        self.startID = startID
+    }
 
     // MARK: - Navigation swipe
     @State private var navDragOffset: CGFloat = 0
@@ -24,11 +35,45 @@ struct ReviewView: View {
             .background(Color.black.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showHelp) { HelpSheet() }
+            .task { await loadInitialItems() }
+    }
+
+    /// Builds the session once: preloaded items synchronously, otherwise an off-main library fetch.
+    private func loadInitialItems() async {
+        guard isLoading else { return }
+        if let preloadedItems {
+            session = ReviewSession(items: preloadedItems, startID: startID)
+        } else {
+            let items = await library.loadItems(for: mode, store: assetStore, mediaFilter: mediaFilter)
+            session = ReviewSession(items: items)
+        }
+        isLoading = false
+    }
+
+    private var loadingView: some View {
+        ZStack(alignment: .topLeading) {
+            Color.black.ignoresSafeArea()
+            ProgressView()
+                .tint(.white)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            Button(action: { dismiss() }) {
+                Image(systemName: "xmark")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 36, height: 36)
+                    .background(.white.opacity(0.1), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal)
+            .padding(.top, 4)
+        }
     }
 
     @ViewBuilder
     private var contentView: some View {
-        if session.isEmpty {
+        if isLoading {
+            loadingView
+        } else if session.isEmpty {
             EmptyStateView(mode: mode, onBack: { dismiss() })
         } else {
             GeometryReader { geo in
@@ -126,8 +171,10 @@ struct ReviewView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
         .onChange(of: mediaFilter) { _, _ in
-            let newItems = library.fetchItems(for: mode, store: assetStore, mediaFilter: mediaFilter)
-            session = ReviewSession(items: newItems)
+            Task {
+                let newItems = await library.loadItems(for: mode, store: assetStore, mediaFilter: mediaFilter)
+                session = ReviewSession(items: newItems)
+            }
         }
     }
 
@@ -288,15 +335,19 @@ struct EmptyStateView: View {
     private var emptyMessage: String {
         switch mode {
         case .onThisDay:
-            let formatter = DateFormatter()
-            formatter.dateFormat = "MMMM d"
-            return "No photos or videos found for \(formatter.string(from: Date())) in past years."
+            return "No photos or videos found for \(Self.monthDayFormatter.string(from: Date())) in past years."
         case .random:       return "All photos in your library have been organized."
         case .unsorted:     return "Every photo has been sorted, kept, or deleted."
         case .keptForLater: return "Tap KEEP on any photo to save it here. Tap RETURN to send it back to Unsorted."
         case .largestFirst: return "No large files left to recover."
         }
     }
+
+    private static let monthDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMMM d"
+        return f
+    }()
 }
 
 // MARK: - Help Sheet
@@ -348,7 +399,7 @@ private struct HelpSheet: View {
 #Preview {
     ReviewView(
         mode: .unsorted,
-        session: ReviewSession(items: MediaItem.mockItems)
+        preloadedItems: MediaItem.mockItems
     )
     .environment(AssetStore())
     .environment(PhotoLibraryService())

@@ -95,7 +95,7 @@ struct TrashView: View {
     private var photoGrid: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 2) {
-                ForEach(Array(assetStore.trashedIDs), id: \.self) { itemID in
+                ForEach(assetStore.trashedIDs.sorted(), id: \.self) { itemID in
                     TrashThumbnailCell(itemID: itemID, thumbnail: thumbnails[itemID])
                         .onAppear { loadThumbnail(for: itemID) }
                 }
@@ -196,21 +196,19 @@ private struct TrashThumbnailCell: View {
     let thumbnail: UIImage?
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                if let thumb = thumbnail {
-                    Image(uiImage: thumb)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: geo.size.width, height: geo.size.width)
-                        .clipped()
-                } else {
-                    Color(white: 0.15)
-                    ProgressView().tint(.white.opacity(0.4)).scaleEffect(0.7)
-                }
+        ZStack {
+            Color(white: 0.15)
+            if let thumb = thumbnail {
+                Image(uiImage: thumb)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                ProgressView().tint(.white.opacity(0.4)).scaleEffect(0.7)
             }
         }
+        .frame(maxWidth: .infinity)
         .aspectRatio(1, contentMode: .fit)
+        .clipped()
     }
 }
 

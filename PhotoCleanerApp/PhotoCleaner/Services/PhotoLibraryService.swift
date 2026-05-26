@@ -16,12 +16,19 @@ class PhotoLibraryService {
 
     // MARK: - Fetch
 
+    /// Synchronous fetch. Heavy for large libraries — prefer `loadItems` off the main thread.
     func fetchItems(for mode: AppMode, store: AssetStore, mediaFilter: MediaFilter = .all) -> [MediaItem] {
-        switch mode {
-        case .keptForLater:
-            return fetchKeptForLater(store: store)
-        default:
-            return fetchGeneral(mode: mode, store: store, mediaFilter: mediaFilter)
+        Self.buildItems(for: mode, snapshot: LibrarySnapshot(store: store), mediaFilter: mediaFilter)
+    }
+
+    /// Async fetch. Snapshots the organize-state on the caller's actor, then enumerates the
+    /// photo library — and, for Largest First, reads per-asset file sizes — off the main thread.
+    func loadItems(for mode: AppMode, store: AssetStore, mediaFilter: MediaFilter = .all) async -> [MediaItem] {
+        let snapshot = LibrarySnapshot(store: store)
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                continuation.resume(returning: Self.buildItems(for: mode, snapshot: snapshot, mediaFilter: mediaFilter))
+            }
         }
     }
 
@@ -29,7 +36,7 @@ class PhotoLibraryService {
         let options = PHFetchOptions()
         options.includeHiddenAssets = false
         options.includeAllBurstAssets = false
-        options.predicate = onThisDayPredicate()
+        options.predicate = Self.onThisDayPredicate()
         options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
 
         let result = PHAsset.fetchAssets(with: options)
@@ -42,7 +49,7 @@ class PhotoLibraryService {
                   let date = asset.creationDate else { return }
             let assetYear = calendar.component(.year, from: date)
             guard assetYear < currentYear else { return }
-            itemsByYear[assetYear, default: []].append(self.makeItem(from: asset))
+            itemsByYear[assetYear, default: []].append(Self.makeItem(from: asset))
         }
 
         return itemsByYear
@@ -56,9 +63,38 @@ class PhotoLibraryService {
             .sorted { $0.year > $1.year }
     }
 
+    // MARK: - Store snapshot
+
+    /// Immutable, `Sendable` snapshot of the organize-state sets, captured on the caller's
+    /// actor so the heavy library enumeration can safely run on a background queue.
+    struct LibrarySnapshot: Sendable {
+        let kept: Set<String>
+        let trashed: Set<String>
+        let sorted: Set<String>
+
+        init(store: AssetStore) {
+            kept = store.keptForLaterIDs
+            trashed = store.trashedIDs
+            sorted = store.sortedIDs
+        }
+
+        func isUnsorted(_ id: String) -> Bool {
+            !kept.contains(id) && !trashed.contains(id) && !sorted.contains(id)
+        }
+    }
+
     // MARK: - Private fetch helpers
 
-    private func fetchGeneral(mode: AppMode, store: AssetStore, mediaFilter: MediaFilter = .all) -> [MediaItem] {
+    private static func buildItems(for mode: AppMode, snapshot: LibrarySnapshot, mediaFilter: MediaFilter) -> [MediaItem] {
+        switch mode {
+        case .keptForLater:
+            return buildKeptForLater(snapshot: snapshot)
+        default:
+            return buildGeneral(mode: mode, snapshot: snapshot, mediaFilter: mediaFilter)
+        }
+    }
+
+    private static func buildGeneral(mode: AppMode, snapshot: LibrarySnapshot, mediaFilter: MediaFilter) -> [MediaItem] {
         let options = PHFetchOptions()
         options.includeHiddenAssets = false
         options.includeAllBurstAssets = false
@@ -97,20 +133,20 @@ class PhotoLibraryService {
 
         var items: [MediaItem] = []
         result.enumerateObjects { asset, _, _ in
-            guard store.isUnsorted(asset.localIdentifier) else { return }
+            guard snapshot.isUnsorted(asset.localIdentifier) else { return }
             if mode == .largestFirst {
-                let size = Self.fileSize(from: asset)
+                let size = fileSize(from: asset)
                 items.append(MediaItem(
                     id: asset.localIdentifier,
                     asset: asset,
-                    mediaType: Self.mediaType(from: asset),
+                    mediaType: mediaType(from: asset),
                     cloudStatus: .local,
                     fileSize: size,
                     fileSizeIsEstimated: size == nil,
                     creationDate: asset.creationDate
                 ))
             } else {
-                items.append(self.makeItem(from: asset))
+                items.append(makeItem(from: asset))
             }
         }
 
@@ -128,20 +164,20 @@ class PhotoLibraryService {
         return items
     }
 
-    private func fetchKeptForLater(store: AssetStore) -> [MediaItem] {
-        let ids = Array(store.keptForLaterIDs)
+    private static func buildKeptForLater(snapshot: LibrarySnapshot) -> [MediaItem] {
+        let ids = Array(snapshot.kept)
         guard !ids.isEmpty else { return [] }
         let result = PHAsset.fetchAssets(withLocalIdentifiers: ids, options: nil)
         var items: [MediaItem] = []
         result.enumerateObjects { asset, _, _ in
-            items.append(self.makeItem(from: asset))
+            items.append(makeItem(from: asset))
         }
         return items
     }
 
     // MARK: - Item construction
 
-    private func makeItem(from asset: PHAsset) -> MediaItem {
+    private static func makeItem(from asset: PHAsset) -> MediaItem {
         MediaItem(
             id: asset.localIdentifier,
             asset: asset,
@@ -175,7 +211,7 @@ class PhotoLibraryService {
         return nil
     }
 
-    private func onThisDayPredicate() -> NSPredicate {
+    private static func onThisDayPredicate() -> NSPredicate {
         let calendar = Calendar.current
         let today = Date()
         let month = calendar.component(.month, from: today)

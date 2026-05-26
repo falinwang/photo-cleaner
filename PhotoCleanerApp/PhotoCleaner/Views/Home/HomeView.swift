@@ -20,10 +20,7 @@ struct HomeView: View {
                 if mode == .onThisDay {
                     OnThisDayView(groups: library.fetchOnThisDayGrouped(store: assetStore))
                 } else {
-                    ReviewView(
-                        mode: mode,
-                        session: ReviewSession(items: library.fetchItems(for: mode, store: assetStore))
-                    )
+                    ReviewView(mode: mode)
                 }
             }
             .sheet(isPresented: $showTrash) {
