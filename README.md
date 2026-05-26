@@ -4,21 +4,23 @@ A local-only, manual photo organizer for iPhone Photos — built with SwiftUI + 
 
 ## Modes
 
-- **On This Day** — Photos from this date in past years
+- **On This Day** — Photos from this date in past years, grouped by year
 - **Random** — Random picks from Unsorted
-- **Unsorted** — Everything not yet organized
-- **Kept for Later** — Temporary bucket for review
+- **Largest First** — Videos first, sorted by file size — recover the most space
+- **Unsorted** — Everything not yet organized, with media-type filter (All / Videos / Screenshots)
+- **Kept for Later** — Temporary staging bucket, one-tap return to Unsorted
 
 ## Features
 
 - Button-driven actions: Skip, Keep, Delete, Return to Unsorted
 - Swipe left/right to navigate between items
-- Inline video playback with controls (play/pause, seek, fullscreen)
-- On This Day grouped by year
-- Source panel showing metadata and provenance
-- Multi-level undo (up to 20 actions)
+- Swipe down to favorite (with heart overlay, writes to PhotoKit)
+- Inline video playback with custom controls (play/pause, seek, fullscreen)
+- On This Day grouped by year with thumbnail grid
+- Source panel: version stage picker, notes, read-only metadata
+- Multi-level undo (up to 20 actions, branches on action type)
 - Sort photos to albums
-- In-app trash with permanent delete via PhotoKit
+- In-app trash with batch recover/permanent delete via PhotoKit
 - Dark mode only
 
 ## Requirements
@@ -39,33 +41,33 @@ Select an iOS 17+ simulator, then Build & Run (Cmd+R).
 
 ```
 PhotoCleaner/
-├── AppState.swift              # App mode enum + global state
+├── AppState.swift              # AppMode enum + AppState observable
 ├── PhotoCleanerApp.swift       # App entry point
 ├── Models/
-│   ├── MediaItem.swift         # Photo/video model
-│   ├── SourceInfo.swift        # Asset metadata and provenance
+│   ├── MediaItem.swift         # MediaItem, MediaType, MediaFilter, CloudStatus
+│   ├── SourceInfo.swift        # VersionStage, SourceInfo (UserDefaults-backed)
 │   ├── YearGroup.swift         # Year-grouped items for On This Day
 │   ├── MockData.swift          # Preview data
-│   └── TaskState.swift         # Item state enum
+│   └── TaskState.swift         # Async task state
 ├── Services/
-│   ├── AssetStore.swift        # UserDefaults-backed state persistence
-│   ├── PhotoLibraryService.swift # PhotoKit fetch + authorization
-│   └── ReviewSession.swift     # Review queue with undo stack
+│   ├── AssetStore.swift        # UserDefaults-backed persisted ID sets
+│   ├── PhotoLibraryService.swift # PhotoKit fetch + async loading + LibrarySnapshot
+│   └── ReviewSession.swift     # Review queue, undo stack, actions
 └── Views/
-    ├── Home/HomeView.swift     # Mode selection
+    ├── Home/HomeView.swift     # Mode selection grid
     ├── Review/
-    │   ├── ReviewView.swift    # Main review screen
-    │   ├── OnThisDayView.swift # Year-grouped On This Day review
+    │   ├── ReviewView.swift    # Main review screen with async loading
+    │   ├── OnThisDayView.swift # Year-grouped thumbnail grid
     │   ├── TopBarView.swift    # Top chrome
-    │   ├── MediaCardView.swift # Photo/video card with badges
+    │   ├── MediaCardView.swift # Photo/video card (AVPlayer + time observer)
     │   ├── SourcePanelView.swift # Metadata and provenance panel
-    │   ├── ActionBarView.swift # Skip / Keep / Delete / Undo
-    │   └── AlbumStripView.swift # Sort-to-album chips
+    │   ├── ActionBarView.swift # Skip / Keep-Return / Delete + Undo
+    │   └── AlbumStripView.swift # Sort-to-album (mock data)
     ├── Shared/
     │   ├── MediaTypeBadge.swift
     │   ├── CloudStatusBadge.swift
     │   └── PermissionView.swift
-    └── Trash/TrashView.swift   # In-app trash
+    └── Trash/TrashView.swift   # In-app trash with batch ops
 ```
 
 ## License
