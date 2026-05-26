@@ -16,12 +16,12 @@ class PhotoLibraryService {
 
     // MARK: - Fetch
 
-    func fetchItems(for mode: AppMode, store: AssetStore) -> [MediaItem] {
+    func fetchItems(for mode: AppMode, store: AssetStore, mediaFilter: MediaFilter = .all) -> [MediaItem] {
         switch mode {
         case .keptForLater:
             return fetchKeptForLater(store: store)
         default:
-            return fetchGeneral(mode: mode, store: store)
+            return fetchGeneral(mode: mode, store: store, mediaFilter: mediaFilter)
         }
     }
 
@@ -58,7 +58,7 @@ class PhotoLibraryService {
 
     // MARK: - Private fetch helpers
 
-    private func fetchGeneral(mode: AppMode, store: AssetStore) -> [MediaItem] {
+    private func fetchGeneral(mode: AppMode, store: AssetStore, mediaFilter: MediaFilter = .all) -> [MediaItem] {
         let options = PHFetchOptions()
         options.includeHiddenAssets = false
         options.includeAllBurstAssets = false
@@ -75,7 +75,26 @@ class PhotoLibraryService {
             break
         }
 
-        let result = PHAsset.fetchAssets(with: options)
+        let result: PHFetchResult<PHAsset>
+        if mode == .unsorted {
+            switch mediaFilter {
+            case .all:
+                result = PHAsset.fetchAssets(with: options)
+            case .videos:
+                result = PHAsset.fetchAssets(with: .video, options: options)
+            case .screenshots:
+                let screenshotPred = NSPredicate(format: "mediaSubtype & %d != 0", PHAssetMediaSubtype.photoScreenshot.rawValue)
+                if let existing = options.predicate {
+                    options.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [existing, screenshotPred])
+                } else {
+                    options.predicate = screenshotPred
+                }
+                result = PHAsset.fetchAssets(with: .image, options: options)
+            }
+        } else {
+            result = PHAsset.fetchAssets(with: options)
+        }
+
         var items: [MediaItem] = []
         result.enumerateObjects { asset, _, _ in
             guard store.isUnsorted(asset.localIdentifier) else { return }

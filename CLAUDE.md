@@ -47,7 +47,7 @@ PhotoCleanerApp/PhotoCleanerApp/PhotoCleaner/
 
 `AppMode` enum in `AppState.swift` currently has 4 values — missing `largestFirst`. PRD requires all 5.
 
-**Divergence from PRD:** PRD specifies Unsorted Videos and Unsorted Screenshots as separate modes. Current implementation has a single Unsorted mode (all media types). This is an acceptable simplification for now — the media-type filter can be added to the Unsorted mode as a segmented control rather than splitting into separate modes.
+**Divergence from PRD:** PRD specifies Unsorted Videos and Unsorted Screenshots as separate modes. Current implementation has a single Unsorted mode with a media-type filter (All / Videos / Screenshots segmented control) rather than splitting into separate modes.
 
 ---
 
@@ -234,7 +234,7 @@ verified:
 
 ### P1
 4. Wire AlbumStripView to real PhotoKit album data instead of `MockAlbum`
-5. Add media-type filter (videos / screenshots / all) to Unsorted mode
+5. ~~Add media-type filter (videos / screenshots / all) to Unsorted mode~~ Done
 6. Ensure video scrub gesture is isolated from card swipe
 
 ### P2

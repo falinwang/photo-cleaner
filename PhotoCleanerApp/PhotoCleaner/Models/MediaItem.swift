@@ -1,6 +1,14 @@
 import Foundation
 import Photos
 
+enum MediaFilter: String, CaseIterable, Identifiable {
+    case all         = "All"
+    case videos      = "Videos"
+    case screenshots = "Screenshots"
+
+    var id: String { rawValue }
+}
+
 enum MediaType: String {
     case photo      = "Photo"
     case video      = "Video"

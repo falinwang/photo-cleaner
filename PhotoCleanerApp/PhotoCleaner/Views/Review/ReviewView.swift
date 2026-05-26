@@ -4,10 +4,12 @@ struct ReviewView: View {
     let mode: AppMode
     @State var session: ReviewSession
     @Environment(AssetStore.self) private var assetStore
+    @Environment(PhotoLibraryService.self) private var library
     @Environment(\.dismiss) private var dismiss
     @State private var showHelp = false
     @State private var showAlbumStrip = false
     @State private var showSourcePanel = false
+    @State private var mediaFilter: MediaFilter = .all
 
     // MARK: - Navigation swipe
     @State private var navDragOffset: CGFloat = 0
@@ -31,7 +33,8 @@ struct ReviewView: View {
         } else {
             GeometryReader { geo in
                 let sourceH: CGFloat = showSourcePanel ? 260 : 0
-                let cardH = geo.size.height - topBarHeight - actionBarHeight - toggleRowHeight - sourceH
+                let filterH: CGFloat = (mode == .unsorted) ? filterBarHeight : 0
+                let cardH = geo.size.height - topBarHeight - actionBarHeight - toggleRowHeight - sourceH - filterH
 
                 VStack(spacing: 0) {
                     TopBarView(
@@ -43,6 +46,10 @@ struct ReviewView: View {
                         onHelp: { showHelp = true },
                         onTrash: { session.delete(store: assetStore) }
                     )
+
+                    if mode == .unsorted {
+                        mediaFilterBar
+                    }
 
                     if let item = session.currentItem {
                         MediaCardView(item: item) { newStatus in
@@ -105,6 +112,24 @@ struct ReviewView: View {
     private let topBarHeight: CGFloat = 72
     private let actionBarHeight: CGFloat = 110
     private let toggleRowHeight: CGFloat = 36
+    private let filterBarHeight: CGFloat = 44
+
+    // MARK: - Media filter bar (Unsorted only)
+
+    private var mediaFilterBar: some View {
+        Picker("Filter", selection: $mediaFilter) {
+            ForEach(MediaFilter.allCases) { filter in
+                Text(filter.rawValue).tag(filter)
+            }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .onChange(of: mediaFilter) { _, _ in
+            let newItems = library.fetchItems(for: mode, store: assetStore, mediaFilter: mediaFilter)
+            session = ReviewSession(items: newItems)
+        }
+    }
 
     // MARK: - Toggle row
 
@@ -326,6 +351,7 @@ private struct HelpSheet: View {
         session: ReviewSession(items: MediaItem.mockItems)
     )
     .environment(AssetStore())
+    .environment(PhotoLibraryService())
 }
 
 #Preview("Empty") {
