@@ -1,72 +1,93 @@
-# Project: iOS Photo Organizer MVP
+# Project: iOS Photo Cleaner
 
 You are building an iOS native app in Swift/SwiftUI using PhotoKit.
+The canonical product spec is `photo-organizer-prd-v1.md` at the repo root — read it when scope questions arise.
 
 ## Product goal
-Build a local-first, manual photo organizer for iPhone Photos.
-No cloud backend, no AI, no auto-delete, no social features.
-The app helps users review memories, inspect source/version history, and manage videos and screenshots in a focused workflow.
+A local-first, manual photo organizer that wraps the system Photos app with a focused review-and-organize workflow. Users review videos and screenshots, recover storage via Largest First, inspect source/version history, and manage items through explicit keep/delete/favorite actions. No cloud backend, no AI, no auto-delete, no social features.
 
-## Core modes
+## Scope by priority
 
-### On This Day (complete — do not touch unless blocked by a bug)
-- Show media from the same month/day across previous years.
-- Includes photos, videos, screenshots, and other media.
-- Group by year sections (last year, two years ago, three years ago, etc.).
-- Uses `PHAsset.creationDate` as the date source.
+### P0 — Must ship
+- **Unsorted Videos** — filter to `PHAssetMediaType.video`, playable inline in review.
+- **Unsorted Screenshots** — filter to screenshot media subtype.
+- **Largest First** — videos first, sorted by file size descending. Show file size on cards.
+- **Review actions** — Delete, Keep, Favorite, Undo. All via explicit buttons.
+- **Left/right swipe** — navigate previous/next item only. Do NOT use swipes for keep/delete.
+- **Video playback** — inline AVPlayer in review. Loading state while preparing. Never static thumbnail for videos.
+- **Kept for Later** — temporary local bucket. One-tap "Return to Unsorted" action.
+- **Source / Version panel** — swipe-up or toggle to reveal (not a separate screen). Shows version stage picker, notes field, and read-only metadata (date, type, size, source, resolution). Supports manual tagging. Missing data shows "Unknown."
+
+### P1 — Important, follow after P0
+- Auto-detect "Saved from" metadata when available from PhotoKit.
+- Manual source/version tagging UI polish.
+- Video progress bar with scrubbing isolated from card navigation gestures.
+- Bottom-sheet or pull-up panel presentation for source/version.
+
+### P2 — Later
+- Capacity stats dashboard.
+- Version history linking across assets.
+- Pre-fetching and lazy-loading performance optimization.
+- Batch operations.
+
+### Explicitly excluded from current scope
+- **Sort to album** — removed to keep stability. Do not build or extend album-sorting features.
+- **On This Day** — complete and frozen. Do not touch unless blocked by a bug.
+- **Random mode** — not in current scope.
+- AI photo cleanup, cloud backup, login/accounts, social sharing, face recognition, content classification, cross-device sync, Lightroom integration.
+
+## Core modes (P0)
 
 ### Unsorted Videos
 - Filter unsorted media to `PHAssetMediaType.video` only.
+- Sort by creation date descending (newest first).
+- Entry point for tackling large video files first.
 
 ### Unsorted Screenshots
-- Filter unsorted media to screenshots only.
+- Filter unsorted media to `PHAssetMediaSubtype.photoScreenshot` only.
+- Sort by creation date descending.
+- Quick cleanup for screenshot buildup.
 
 ### Largest First
-- Prioritize videos first, then sort by file size descending.
-- A capacity-focused cleanup entry point.
+- Videos first, then photos, sorted by file size descending.
+- Use `PHAssetResource` for file size (may be estimated for iCloud assets — label accordingly).
+- Capacity-focused entry point.
 
 ### Kept for Later
-- Keep moves items into a temporary local bucket.
-- User can one-tap move items back to Unsorted.
+- "Keep" action moves items into this temporary local bucket (stored in `AssetStore.keptForLaterIDs`).
+- User can review kept items and one-tap return them to Unsorted.
+- Not a final destination — a staging area.
 
 ## Review actions
-- **Delete** — moves to in-app trash first.
-- **Keep** — moves to Kept for Later bucket.
-- **Favorite** — marks the item as favorite.
-- **Sort to album** — sorts item into a PhotoKit album.
-- **Undo** — restores the previous action.
-- Actions use explicit buttons, not swipe gestures.
+- **Delete** — moves to in-app trash (`AssetStore.trashedIDs`). User must confirm permanent deletion in TrashView.
+- **Keep** — moves to Kept for Later bucket (`AssetStore.keptForLaterIDs`).
+- **Favorite** — marks the PHAsset as favorite via PhotoKit write.
+- **Undo** — restores the previous action (single-level, up to 20 in stack).
+- All actions use explicit buttons in the action bar. Do NOT use swipe gestures for keep/delete.
 
 ## Gestures
-- **Left/right swipe** — navigate to previous/next item like the Photos app.
+- **Left/right swipe** — navigate to previous/next item (like system Photos app).
 - **Swipe up** — open the source/version detail panel.
-- Gestures must not conflict with video playback or scrubbing.
+- Gestures must not conflict with video playback controls or scrubbing.
 
 ## Source / Version panel
-- Swipe-up or toggle to reveal a detail panel (not a separate screen).
-- Shows: source/app, version stage, user notes, metadata.
-- Example version labels: original, Lightroom export, Meitu edit, Instagram upload, X upload.
-- Missing data shows "Unknown" or "Not tagged".
-- Supports manual source/version tagging.
+- Swipe-up or toggle to reveal an overlay/panel (not a separate navigation screen).
+- Editable: version stage picker (`VersionStage` enum), free-text notes field.
+- Read-only metadata: date, media type, file size, PHAsset source type, pixel resolution, subtype tags.
+- Persisted per-asset via `UserDefaults` keyed by `localIdentifier`.
+- Missing data shows "Unknown" or "Not tagged."
 
 ## Video playback
-- Videos play inline in the review flow via AVPlayer/AVPlayerItem.
-- Loading state while preparing, clear fallback on failure.
-- Never show videos as static images in review mode.
+- Videos play inline in the review card via AVPlayer / AVPlayerViewController.
+- Request `PHImageManager.requestPlayerItem(forVideo:options:resultHandler:)`.
+- Show loading indicator while player item prepares.
+- Show clear fallback (error icon + "Unable to play") on failure.
+- Never display a video asset as a static thumbnail in review mode.
 
-## Source / metadata
-- Surface Photos metadata about where a photo was saved from, if available.
-- If no metadata, allow manual source/version tagging.
-
-## Suggested MVP scope
-- On This Day (done), Unsorted Videos, Unsorted Screenshots, Largest First
-- Review actions (Delete, Keep, Favorite, Sort to album, Undo)
-- Left/right navigation, Swipe-up source/version panel
-- Video playback, Kept for Later, Manual source/version tags
-
-## Out of scope
-AI photo cleanup, cloud backup, login/accounts, social sharing, face recognition,
-content classification, cross-device sync, Lightroom integration.
+## File size convention
+- File sizes stored as `Int64` bytes.
+- `formattedFileSize` formats to KB or MB (threshold 1,000,000 bytes).
+- Estimated sizes (from iCloud assets) prefixed with `~`.
 
 ## UI rules
 - Show media type early and clearly: photo, video, screenshot, or other.
@@ -92,6 +113,6 @@ content classification, cross-device sync, Lightroom integration.
 - Batch related edits together.
 - Work autonomously and continue until the task is complete.
 - Only stop to ask if something is truly blocking.
-- After each milestone, summarize what changed, how to test it, any known limitations, and useful follow-ups.
+- After each milestone, summarize: what changed, how to test it, known limitations, useful follow-ups.
 - Do not expand scope without asking.
 - If an instruction conflicts with a better product decision, explain why before changing direction.

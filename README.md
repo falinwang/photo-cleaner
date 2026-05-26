@@ -11,7 +11,11 @@ A local-only, manual photo organizer for iPhone Photos — built with SwiftUI + 
 
 ## Features
 
-- Swipe left/right/up/down to skip, keep, delete, or favorite
+- Button-driven actions: Skip, Keep, Delete, Return to Unsorted
+- Swipe left/right to navigate between items
+- Inline video playback with controls (play/pause, seek, fullscreen)
+- On This Day grouped by year
+- Source panel showing metadata and provenance
 - Multi-level undo (up to 20 actions)
 - Sort photos to albums
 - In-app trash with permanent delete via PhotoKit
@@ -39,6 +43,8 @@ PhotoCleaner/
 ├── PhotoCleanerApp.swift       # App entry point
 ├── Models/
 │   ├── MediaItem.swift         # Photo/video model
+│   ├── SourceInfo.swift        # Asset metadata and provenance
+│   ├── YearGroup.swift         # Year-grouped items for On This Day
 │   ├── MockData.swift          # Preview data
 │   └── TaskState.swift         # Item state enum
 ├── Services/
@@ -49,9 +55,11 @@ PhotoCleaner/
     ├── Home/HomeView.swift     # Mode selection
     ├── Review/
     │   ├── ReviewView.swift    # Main review screen
+    │   ├── OnThisDayView.swift # Year-grouped On This Day review
     │   ├── TopBarView.swift    # Top chrome
-    │   ├── MediaCardView.swift # Photo card with badges
-    │   ├── ActionBarView.swift # Skip / Keep / Delete
+    │   ├── MediaCardView.swift # Photo/video card with badges
+    │   ├── SourcePanelView.swift # Metadata and provenance panel
+    │   ├── ActionBarView.swift # Skip / Keep / Delete / Undo
     │   └── AlbumStripView.swift # Sort-to-album chips
     ├── Shared/
     │   ├── MediaTypeBadge.swift
