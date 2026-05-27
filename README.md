@@ -1,5 +1,7 @@
 # Photo Cleaner
 
+**EN** | [中文](README_zh.md)
+
 A local-only, manual photo organizer for iPhone Photos — built with SwiftUI + PhotoKit.
 
 ## Modes
@@ -16,11 +18,13 @@ A local-only, manual photo organizer for iPhone Photos — built with SwiftUI + 
 - Swipe left/right to navigate between items
 - Swipe down to favorite (with heart overlay, writes to PhotoKit)
 - Inline video playback with custom controls (play/pause, seek, fullscreen)
+- Cloud status indicators (local, iCloud downloading, download failed)
 - On This Day grouped by year with thumbnail grid
 - Source panel: version stage picker, notes, read-only metadata
 - Multi-level undo (up to 20 actions, branches on action type)
-- Sort photos to albums
+- Sort to albums (UI in place, awaiting real PhotoKit album data wiring)
 - In-app trash with batch recover/permanent delete via PhotoKit
+- Custom app icon
 - Dark mode only
 
 ## Requirements
