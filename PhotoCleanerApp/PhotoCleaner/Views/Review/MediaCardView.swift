@@ -7,6 +7,7 @@ import UIKit
 struct MediaCardView: View {
     let item: MediaItem
     var onCloudStatusUpdate: ((CloudStatus) -> Void)? = nil
+    var onScrubbing: ((Bool) -> Void)? = nil
 
     @State private var image: UIImage? = nil
     @State private var imageRequestID: PHImageRequestID? = nil
@@ -112,6 +113,7 @@ struct MediaCardView: View {
                     in: 0...max(duration, 0.01),
                     onEditingChanged: { editing in
                         isSeeking = editing
+                        onScrubbing?(editing)
                         if editing {
                             player.pause()
                         } else {
@@ -249,6 +251,8 @@ struct MediaCardView: View {
     }
 
     private func loadVideo(asset: PHAsset) {
+        onCloudStatusUpdate?(.downloading)
+
         let options = PHVideoRequestOptions()
         options.isNetworkAccessAllowed = true
         options.deliveryMode = .highQualityFormat
@@ -257,7 +261,10 @@ struct MediaCardView: View {
             forVideo: asset,
             options: options
         ) { playerItem, info in
-            guard let playerItem else { return }
+            guard let playerItem else {
+                DispatchQueue.main.async { onCloudStatusUpdate?(.failed) }
+                return
+            }
             DispatchQueue.main.async {
                 let player = AVPlayer(playerItem: playerItem)
                 self.player = player
@@ -271,6 +278,8 @@ struct MediaCardView: View {
     }
 
     private func loadImage(asset: PHAsset) {
+        onCloudStatusUpdate?(.downloading)
+
         let options = PHImageRequestOptions()
         options.deliveryMode = .opportunistic
         options.isNetworkAccessAllowed = true
@@ -285,7 +294,12 @@ struct MediaCardView: View {
             contentMode: .aspectFit,
             options: options
         ) { result, info in
-            guard let result else { return }
+            guard let result else {
+                DispatchQueue.main.async { onCloudStatusUpdate?(.failed) }
+                return
+            }
+            let isDegraded = info?[PHImageResultIsDegradedKey] as? Bool ?? false
+            guard !isDegraded else { return }
             DispatchQueue.main.async {
                 self.image = result
                 let isInCloud = info?[PHImageResultIsInCloudKey] as? Bool ?? false

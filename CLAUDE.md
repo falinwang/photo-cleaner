@@ -223,7 +223,9 @@ verified:
 
 | ID | Status | Description | File |
 |---|---|---|---|
-| BUG-001 | Fixed (2026-05-26) | Play button hidden behind video badge row. Root cause: outer `ZStack(alignment: .bottom)` rendered `badgeRow` on top of `mediaLayer`. When card height was constrained (source panel open, short video), the centered Play button overlapped the bottom-aligned badge row, and the badge won on z-order. Fix: moved `badgeRow` inside each branch of `mediaLayer` — behind the Play button/tap-area/controls in the video ZStack, and overlaid at `.bottom` for photos. | `MediaCardView.swift:29-32` |
+| BUG-001 | Fixed (2026-05-26) | Play button hidden behind video badge row. Root cause: outer `ZStack(alignment: .bottom)` rendered `badgeRow` on top of `mediaLayer`. Fix: moved `badgeRow` inside each branch of `mediaLayer` behind interactive elements. | `MediaCardView.swift:29-32` |
+| BUG-002 | Fixed (2026-05-26) | Cloud-status badge always shows "Local." Root cause: `makeItem(from:)` hardcoded `.local`, lazy correction unreliable. Fix: eager `cloudStatus(for:)` sync check + `.downloading`/`.failed` signals. | `PhotoLibraryService.swift:192-204`, `MediaCardView.swift:253,275` |
+| BUG-003 | Fixed (2026-05-26) | Photos appear broken/blurry during card navigation swipe. Root cause: `deliveryMode: .opportunistic` delivered degraded images; snap-back nav animation caused visual glitches. Fix: skip degraded deliveries via `PHImageResultIsDegradedKey`; slide-in from opposite side instead of snap-back. | `MediaCardView.swift:299`, `ReviewView.swift:234-250` |
 
 ## Known sharp edges
 
@@ -242,7 +244,7 @@ verified:
 ### P1
 4. Wire AlbumStripView to real PhotoKit album data instead of `MockAlbum`
 5. ~~Add media-type filter (videos / screenshots / all) to Unsorted mode~~ Done
-6. Ensure video scrub gesture is isolated from card swipe
+6. ~~Ensure video scrub gesture is isolated from card swipe~~ Done — `onScrubbing` callback suppresses `navGesture` during slider drag
 
 ### P2
 7. Capacity stats dashboard

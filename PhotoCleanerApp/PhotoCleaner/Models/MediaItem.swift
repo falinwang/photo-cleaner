@@ -47,7 +47,7 @@ struct MediaItem: Identifiable {
     let mediaType: MediaType
     var cloudStatus: CloudStatus
     var fileSize: Int64?            // bytes; nil = unknown — loaded lazily per card
-    let fileSizeIsEstimated: Bool
+    var fileSizeIsEstimated: Bool
     let creationDate: Date?
 
     var formattedFileSize: String? {

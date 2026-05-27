@@ -15,6 +15,7 @@ struct ReviewView: View {
     @State private var showAlbumStrip = false
     @State private var showSourcePanel = false
     @State private var mediaFilter: MediaFilter = .all
+    @State private var isVideoScrubbing = false
 
     init(mode: AppMode, preloadedItems: [MediaItem]? = nil, startID: String? = nil) {
         self.mode = mode
@@ -97,9 +98,13 @@ struct ReviewView: View {
                     }
 
                     if let item = session.currentItem {
-                        MediaCardView(item: item) { newStatus in
-                            session.updateCloudStatus(newStatus, for: item.id)
-                        }
+                        MediaCardView(
+                            item: item,
+                            onCloudStatusUpdate: { newStatus in
+                                session.updateCloudStatus(newStatus, for: item.id)
+                            },
+                            onScrubbing: { isVideoScrubbing = $0 }
+                        )
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
                         .frame(width: geo.size.width, height: cardH)
@@ -212,6 +217,7 @@ struct ReviewView: View {
     private var navGesture: some Gesture {
         DragGesture()
             .onChanged { value in
+                guard !isVideoScrubbing else { return }
                 let isHorizontal = abs(value.translation.width) > abs(value.translation.height)
                 if isHorizontal {
                     navDragOffset = value.translation.width
@@ -222,21 +228,24 @@ struct ReviewView: View {
                 }
             }
             .onEnded { value in
+                guard !isVideoScrubbing else { return }
                 let isHorizontal = abs(value.translation.width) > abs(value.translation.height)
                 if isHorizontal {
                     if value.translation.width < -navThreshold {
                         let w = UIScreen.main.bounds.width
                         withAnimation(.easeOut(duration: 0.2)) { navDragOffset = -w }
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-                            navDragOffset = 0
+                            navDragOffset = w
                             session.moveToNext()
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { navDragOffset = 0 }
                         }
                     } else if value.translation.width > navThreshold {
                         let w = UIScreen.main.bounds.width
                         withAnimation(.easeOut(duration: 0.2)) { navDragOffset = w }
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-                            navDragOffset = 0
+                            navDragOffset = -w
                             session.moveToPrevious()
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { navDragOffset = 0 }
                         }
                     } else {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { navDragOffset = 0 }

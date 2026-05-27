@@ -136,15 +136,10 @@ class PhotoLibraryService {
             guard snapshot.isUnsorted(asset.localIdentifier) else { return }
             if mode == .largestFirst {
                 let size = fileSize(from: asset)
-                items.append(MediaItem(
-                    id: asset.localIdentifier,
-                    asset: asset,
-                    mediaType: mediaType(from: asset),
-                    cloudStatus: .local,
-                    fileSize: size,
-                    fileSizeIsEstimated: size == nil,
-                    creationDate: asset.creationDate
-                ))
+                var item = makeItem(from: asset)
+                item.fileSize = size
+                item.fileSizeIsEstimated = (size == nil)
+                items.append(item)
             } else {
                 items.append(makeItem(from: asset))
             }
@@ -182,11 +177,30 @@ class PhotoLibraryService {
             id: asset.localIdentifier,
             asset: asset,
             mediaType: Self.mediaType(from: asset),
-            cloudStatus: .local,
+            cloudStatus: Self.cloudStatus(for: asset),
             fileSize: nil,              // loaded lazily per card — avoids main-thread watchdog
             fileSizeIsEstimated: false,
             creationDate: asset.creationDate
         )
+    }
+
+    // MARK: - Cloud status
+
+    /// Synchronous, local-only check: returns `.iCloudOnly` when the primary
+    /// asset data is not on disk, `.local` otherwise.  Runs off the main thread
+    /// during item construction — `isNetworkAccessAllowed = false` keeps it fast.
+    static func cloudStatus(for asset: PHAsset) -> CloudStatus {
+        let options = PHImageRequestOptions()
+        options.isSynchronous = true
+        options.isNetworkAccessAllowed = false
+        options.deliveryMode = .fastFormat
+        var inCloud = true
+        PHImageManager.default().requestImageDataAndOrientation(
+            for: asset, options: options
+        ) { data, _, _, _ in
+            if data != nil { inCloud = false }
+        }
+        return inCloud ? .iCloudOnly : .local
     }
 
     // MARK: - Helpers
