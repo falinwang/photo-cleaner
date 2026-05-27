@@ -14,6 +14,7 @@ struct ReviewView: View {
     @State private var showHelp = false
     @State private var showAlbumStrip = false
     @State private var showSourcePanel = false
+    @State private var showTrash = false
     @State private var mediaFilter: MediaFilter = .all
     @State private var isVideoScrubbing = false
 
@@ -36,6 +37,7 @@ struct ReviewView: View {
             .background(Color.black.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showHelp) { HelpSheet() }
+            .sheet(isPresented: $showTrash) { TrashView().environment(assetStore) }
             .task { await loadInitialItems() }
     }
 
@@ -87,10 +89,10 @@ struct ReviewView: View {
                         mode: mode,
                         item: session.currentItem,
                         progressText: session.progressText,
-                        trashHighlighted: false,
+                        trashCount: assetStore.trashedIDs.count,
                         onClose: { dismiss() },
                         onHelp: { showHelp = true },
-                        onTrash: { session.delete(store: assetStore) }
+                        onTrashOpen: { showTrash = true }
                     )
 
                     if mode == .unsorted {

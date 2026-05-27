@@ -4,10 +4,10 @@ struct TopBarView: View {
     let mode: AppMode
     let item: MediaItem?
     let progressText: String
-    var trashHighlighted: Bool = false
+    var trashCount: Int = 0
     let onClose: () -> Void
     let onHelp: () -> Void
-    let onTrash: () -> Void
+    let onTrashOpen: () -> Void
 
     var body: some View {
         VStack(spacing: 6) {
@@ -40,18 +40,23 @@ struct TopBarView: View {
                 }
                 .buttonStyle(.plain)
 
-                // Trash icon — glows red and scales up when card is dragged toward it
-                Button(action: onTrash) {
-                    Image(systemName: trashHighlighted ? "trash.fill" : "trash")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(trashHighlighted ? .red : .white)
-                        .frame(width: 36, height: 36)
-                        .background(
-                            trashHighlighted ? .red.opacity(0.2) : .white.opacity(0.12),
-                            in: Circle()
-                        )
-                        .scaleEffect(trashHighlighted ? 1.25 : 1.0)
-                        .animation(.spring(response: 0.25, dampingFraction: 0.6), value: trashHighlighted)
+                // Trash icon — opens TrashView to review deleted items
+                Button(action: onTrashOpen) {
+                    ZStack {
+                        Image(systemName: "trash")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(trashCount > 0 ? .red : .white.opacity(0.5))
+                        if trashCount > 0 {
+                            Text("\(min(trashCount, 99))")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(3)
+                                .background(.red, in: Circle())
+                                .offset(x: 8, y: -8)
+                        }
+                    }
+                    .frame(width: 36, height: 36)
+                    .background(.white.opacity(0.12), in: Circle())
                 }
                 .buttonStyle(.plain)
             }
@@ -95,19 +100,19 @@ struct TopBarView: View {
             mode: .unsorted,
             item: MediaItem.mockItems[0],
             progressText: "1/213",
-            trashHighlighted: false,
+            trashCount: 0,
             onClose: {},
             onHelp: {},
-            onTrash: {}
+            onTrashOpen: {}
         )
         TopBarView(
             mode: .unsorted,
             item: MediaItem.mockItems[0],
             progressText: "1/213",
-            trashHighlighted: true,
+            trashCount: 5,
             onClose: {},
             onHelp: {},
-            onTrash: {}
+            onTrashOpen: {}
         )
     }
     .background(.black)
