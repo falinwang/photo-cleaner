@@ -177,7 +177,7 @@ class PhotoLibraryService {
             id: asset.localIdentifier,
             asset: asset,
             mediaType: Self.mediaType(from: asset),
-            cloudStatus: Self.cloudStatus(for: asset),
+            cloudStatus: .iCloudOnly,   // safe default; corrected lazily per card in MediaCardView
             fileSize: nil,              // loaded lazily per card — avoids main-thread watchdog
             fileSizeIsEstimated: false,
             creationDate: asset.creationDate
