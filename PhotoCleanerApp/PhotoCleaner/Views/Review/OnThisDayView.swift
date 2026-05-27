@@ -5,8 +5,7 @@ struct OnThisDayView: View {
     let groups: [YearGroup]
     @Environment(AssetStore.self) private var assetStore
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedGroup: YearGroup? = nil
-    @State private var startItemID: String? = nil
+    @State private var navigationTarget: NavigationTarget? = nil
     @State private var thumbnails: [String: UIImage] = [:]
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 3)
@@ -21,11 +20,11 @@ struct OnThisDayView: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
-        .navigationDestination(item: $selectedGroup) { group in
+        .navigationDestination(item: $navigationTarget) { target in
             ReviewView(
                 mode: .onThisDay,
-                preloadedItems: group.items,
-                startID: startItemID
+                preloadedItems: target.group.items,
+                startID: target.startItemID
             )
         }
     }
@@ -97,8 +96,7 @@ struct OnThisDayView: View {
 
     private func thumbnailCell(for item: MediaItem, in group: YearGroup) -> some View {
         Button {
-            startItemID = item.id
-            selectedGroup = group
+            navigationTarget = NavigationTarget(group: group, startItemID: item.id)
         } label: {
             ZStack {
                 Color(white: 0.15)
@@ -206,6 +204,13 @@ struct OnThisDayView: View {
             DispatchQueue.main.async { thumbnails[item.id] = image }
         }
     }
+}
+
+// MARK: - Navigation target (atomic group + startID, avoids SwiftUI state-batching race)
+
+private struct NavigationTarget: Hashable {
+    let group: YearGroup
+    let startItemID: String
 }
 
 #Preview("With data") {
