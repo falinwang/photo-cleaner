@@ -103,7 +103,7 @@ struct OnThisDayView: View {
                 if let thumb = thumbnails[item.id] {
                     Image(uiImage: thumb)
                         .resizable()
-                        .scaledToFill()
+                        .scaledToFit()
                 } else {
                     ProgressView().tint(.white.opacity(0.4)).scaleEffect(0.7)
                 }
@@ -129,8 +129,6 @@ struct OnThisDayView: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .aspectRatio(1, contentMode: .fit)
-            .clipped()
         }
         .buttonStyle(.plain)
     }
